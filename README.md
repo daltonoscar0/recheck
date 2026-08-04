@@ -27,6 +27,7 @@ something true about the paper.
 | Repo acquisition, read-only + pinned | ✅ working |
 | Script-to-table mapping | ✅ working, deterministic |
 | Sandboxed execution, budgets | ✅ working |
+| Building an environment a repo never declared | ✅ working, opt-in |
 | Container sandbox backend | ⬜ milestone 3 — see [NEXT.md](NEXT.md) |
 | Two public papers, launch | ⬜ milestone 3 |
 

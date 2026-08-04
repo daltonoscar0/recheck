@@ -140,6 +140,31 @@ extraction operates on LaTeX by design. `garden_path_calibration.tex` carries
 the paper's real numbers in representative markup. When the source is
 exported, point `recheck extract` at it and the fixture can retire.
 
+## Execution
+
+**Installing packages a repo never declared is opt-in.** Most published repos
+declare nothing, or declare partially, which is why recheck refused to execute
+anything for its first two real papers. `--install-inferred` reads the missing
+distributions off the script's imports and installs them. It is off by default
+because inferring an environment is a guess about what the authors ran, and a
+guess that silently succeeds is exactly the failure this tool exists to
+prevent. Every run that uses it records the packages in
+`run.environment.inferred` and states the deviation as a caveat against each
+affected table, so the numbers can never reach a reader looking like an
+ordinary reproduction.
+
+**The environment is topped up, not rebuilt, between tables.** It is built once
+per run and reused, so a table reached later can import something an earlier one
+did not. Running that table against an environment missing its imports would
+fail at runtime with an error that looks like the paper's fault rather than
+ours.
+
+**Installs are measured, not estimated, and charged to the budget.**
+`spend_download` existed and was never called: `--max-download-mb` gated the
+pre-run estimate while real bytes landed unmetered. Package sizes are not
+knowable ahead of time, so the venv is measured before and after and the growth
+is charged. A budget only ever checked against a guess is not a budget.
+
 ## Acquisition
 
 **A dirty local tree is refused, not silently pinned to HEAD.** The report's
