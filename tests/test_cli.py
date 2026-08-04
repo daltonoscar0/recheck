@@ -4,6 +4,7 @@ import json
 
 from typer.testing import CliRunner
 
+from conftest import SCORE_SCRIPT, SCORES_CSV, SCORES_PAPER_TEX, make_git_repo, shared_git_repo
 from recheck.cli import app
 
 runner = CliRunner()
@@ -100,10 +101,86 @@ class TestDiff:
 
 
 class TestRun:
-    def test_reports_that_execution_is_pending(self, fixtures_dir) -> None:
+    def _repo(self):
+        return shared_git_repo(
+            {"run_eval.py": SCORE_SCRIPT, "results/scores_tiny.csv": SCORES_CSV}
+        )
+
+    def _paper(self, tmp_path):
+        path = tmp_path / "paper.tex"
+        path.write_text(SCORES_PAPER_TEX)
+        return path
+
+    def test_a_repo_is_required(self, fixtures_dir) -> None:
         result = runner.invoke(app, ["run", str(fixtures_dir / "clean_booktabs.tex")])
-        assert result.exit_code == 3
-        assert "milestone 2" in result.stdout
+        assert result.exit_code == 2
+        assert "--repo is required" in result.stderr
+
+    def test_reproduces_end_to_end(self, tmp_path) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "run", str(self._paper(tmp_path)),
+                "--repo", str(self._repo()),
+                "--max-gpu", "0",
+                "--results-out", str(tmp_path / "results.json"),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Acquired" in result.stdout
+
+        payload = json.loads((tmp_path / "results.json").read_text())
+        assert payload["schema_version"] == "1.0"
+        assert payload["run"]["commit"]
+        by_address = {c["address"]: c for c in payload["cells"]}
+        assert by_address["Table 1 › tiny › dev"]["value"] == 0.85
+        assert by_address["Table 1 › huge › dev"]["failure"]["code"] == "SCRIPT_NOT_FOUND"
+
+    def test_writes_a_markdown_report_with_provenance(self, tmp_path) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "run", str(self._paper(tmp_path)),
+                "--repo", str(self._repo()),
+                "--max-gpu", "0",
+                "--out", str(tmp_path / "report.md"),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        report = (tmp_path / "report.md").read_text()
+        assert "**Provenance:**" in report
+        assert "run_eval.py" in report
+
+    def test_a_dirty_repo_is_refused(self, tmp_path) -> None:
+        source = make_git_repo(tmp_path / "dirty", {"a.py": "print(1)\n"})
+        (source / "a.py").write_text("print(2)\n")
+        result = runner.invoke(
+            app, ["run", str(self._paper(tmp_path)), "--repo", str(source)]
+        )
+        assert result.exit_code == 2
+        assert "uncommitted" in result.stderr
+
+    def test_the_workdir_can_be_kept(self, tmp_path) -> None:
+        workdir = tmp_path / "keep"
+        runner.invoke(
+            app,
+            [
+                "run", str(self._paper(tmp_path)),
+                "--repo", str(self._repo()),
+                "--max-gpu", "0",
+                "--workdir", str(workdir),
+            ],
+        )
+        assert (workdir / "repo" / "run_eval.py").exists()
+
+    def test_help_lists_the_execution_flags(self) -> None:
+        # Wide, so the option column is not wrapped mid-flag.
+        result = runner.invoke(app, ["run", "--help"], env={"COLUMNS": "200"})
+        assert result.exit_code == 0
+        for option in ("--max-download-mb", "--results-out", "--workdir", "--allow-dirty",
+                       "--committed-artifacts", "--no-committed-artifacts", "--plan-cache",
+                       "--refresh-plan"):
+            assert option in result.stdout
 
 
 class TestPerTableTolerance:

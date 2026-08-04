@@ -1,120 +1,79 @@
 #!/usr/bin/env python3
-"""Recompute the calibration table's numbers from the source repo's raw data.
+"""Regenerate the committed calibration results with the real executor.
 
-This stands in for the execution agent that milestone 2 will provide: it reads
-the garden-path repo's per-item surprisal CSVs, aggregates them the way the
-paper does, and emits a results.json. The repo is opened read-only.
+This used to be a hand-written stand-in that knew the garden-path repo's CSV
+layout. It no longer knows anything about it: it runs the same pipeline
+`recheck run` does — acquire read-only, map, budget, execute, harvest — and
+writes what comes out. If the committed fixture moves, the executor changed.
 
     python scripts/build_calibration_results.py --repo ~/price-of-reanalysis \
         --out tests/fixtures/results/garden_path_results.json
+
+The repo is not in CI, so the fixture stays committed; this script is how it is
+refreshed, and the resulting diff is the review artifact.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import json
-import statistics
-import subprocess
-from collections import defaultdict
+import sys
+import tempfile
 from pathlib import Path
 
-MODELS = {
-    "GPT-2-large": "surprisal_gpt2-large.csv",
-    "Pythia-1.4B": "surprisal_EleutherAI_pythia-1.4b.csv",
-}
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
 
-CONDITIONS = {"Ambiguous": "ambiguous", "Control": "control"}
-
-# Reported in the paper but not reproducible here: the model is API-only, so no
-# checkpoint exists to score the stimuli against.
-UNRUNNABLE_MODEL = "GPT-3 davinci"
-UNRUNNABLE_EVIDENCE = (
-    "openai/davinci is API-gated and no local checkpoint is published; "
-    "the repo contains no scoring path for it (score_surprisal_multimodel.py "
-    "enumerates only HuggingFace model ids)"
-)
-
-
-def aggregate(csv_path: Path) -> dict[str, list[float]]:
-    groups: dict[str, list[float]] = defaultdict(list)
-    with csv_path.open() as handle:
-        for row in csv.DictReader(handle):
-            if row["construction"] != "NPZ":
-                continue
-            groups[row["condition"]].append(float(row["critical_region_surprisal"]))
-    return groups
-
-
-def git_commit(repo: Path) -> str:
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return out.stdout.strip()
-    except (subprocess.CalledProcessError, OSError):
-        return "unknown"
+from recheck.exec import Budget, LocalSandbox, RunOptions, execute  # noqa: E402
+from recheck.paper import extract_tables  # noqa: E402
+from recheck.repo import RepoError, acquire  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=Path.home() / "price-of-reanalysis")
+    parser.add_argument(
+        "--paper",
+        type=Path,
+        default=ROOT / "tests" / "fixtures" / "garden_path_calibration.tex",
+        help="LaTeX source of the calibration paper.",
+    )
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--max-hours", type=float, default=2.0)
+    parser.add_argument("--max-gpu", type=float, default=0.0)
+    parser.add_argument("--max-download-mb", type=float, default=512.0)
     args = parser.parse_args()
 
-    stimuli = args.repo / "phase1_stimuli"
-    if not stimuli.is_dir():
-        parser.error(f"no phase1_stimuli directory under {args.repo}")
+    paper = extract_tables(args.paper.read_text())
+    root = Path(tempfile.mkdtemp(prefix="recheck-calibration-"))
+    sandbox = LocalSandbox(root)
+    try:
+        repo = acquire(str(args.repo), sandbox.workdir)
+    except RepoError as exc:
+        parser.error(str(exc))
 
-    cells = []
-    for model, filename in MODELS.items():
-        groups = aggregate(stimuli / filename)
-        means = {}
-        for label, key in CONDITIONS.items():
-            values = groups.get(key, [])
-            if not values:
-                continue
-            mean = statistics.mean(values)
-            means[label] = mean
-            cells.append(
-                {
-                    "address": f"Table 1 › {model} › {label}",
-                    "value": round(mean, 3),
-                    "uncertainty": round(statistics.stdev(values), 3),
-                    "n_seeds": 1,
-                }
+    report = execute(
+        paper,
+        repo,
+        sandbox,
+        RunOptions(
+            budget=Budget(
+                max_hours=args.max_hours,
+                max_gpu_hours=args.max_gpu,
+                max_download_mb=args.max_download_mb,
             )
-        if len(means) == 2:
-            cells.append(
-                {
-                    "address": f"Table 1 › {model} › Δ",
-                    "value": round(means["Ambiguous"] - means["Control"], 3),
-                }
-            )
+        ),
+    )
 
-    for label in (*CONDITIONS, "Δ"):
-        cells.append(
-            {
-                "address": f"Table 1 › {UNRUNNABLE_MODEL} › {label}",
-                "failure": {"code": "MISSING_CHECKPOINT", "evidence": UNRUNNABLE_EVIDENCE},
-            }
-        )
-
-    payload = {
-        "schema_version": "1.0",
-        "run": {
-            "repo": str(args.repo),
-            "commit": git_commit(args.repo),
-            "note": "aggregated from committed per-item surprisal CSVs, not re-scored",
-        },
-        "cells": cells,
-    }
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
-    print(f"wrote {len(cells)} result cells → {args.out}")
+    args.out.write_text(
+        json.dumps(report.results.to_dict(), indent=2, ensure_ascii=False) + "\n"
+    )
+    produced = sum(1 for cell in report.results.cells if not cell.is_failure)
+    print(f"wrote {len(report.results.cells)} result cells ({produced} with values) → {args.out}")
+    for outcome in report.outcomes:
+        codes = ", ".join(b.code.value for b in outcome.blockers) or "—"
+        print(f"  {outcome.table_id}: {outcome.status} via {outcome.script or '—'} [{codes}]")
     return 0
 
 

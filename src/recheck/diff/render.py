@@ -93,6 +93,10 @@ def render_terminal(report: DiffReport, console: Console | None = None) -> None:
     console = console or Console()
     counts = report.counts()
 
+    if report.run.get("note"):
+        console.print(Text(f"Provenance: {report.run['note']}", style="dim"))
+        console.print()
+
     for table_index, comparisons in sorted(report.by_table().items()):
         grid = RichTable(
             title=f"Table {table_index}",
@@ -155,6 +159,10 @@ def render_markdown(report: DiffReport) -> str:
         lines.append(f"**Repo:** {report.run['repo']}")
     if report.run.get("commit"):
         lines.append(f"**Commit:** `{report.run['commit']}`")
+    # Where the numbers came from is not a footnote. A reader who does not know
+    # whether a run happened cannot read the green cells correctly.
+    if report.run.get("note"):
+        lines.append(f"**Provenance:** {report.run['note']}")
     if lines[-1] != "":
         lines.append("")
 

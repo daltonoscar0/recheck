@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -20,7 +24,10 @@ from .diff import (
     render_terminal,
     resolve_policy,
 )
+from .exec import Budget, ExecutionReport, LocalSandbox, RunOptions, execute
+from .map.cache import default_cache_dir
 from .paper import FetchError, extract_tables, fetch, find_main_tex, load_local, resolve_inputs
+from .repo import RepoError, acquire
 from .schema import Paper, Results, SchemaError
 
 app = typer.Typer(
@@ -56,6 +63,46 @@ ToleranceConfigOption = Annotated[
     typer.Option(
         "--tolerance-config",
         help="TOML file with per-table tolerance bands. Defaults to the nearest recheck.toml.",
+    ),
+]
+MaxDownloadOption = Annotated[
+    float,
+    typer.Option(
+        "--max-download-mb",
+        help="Ceiling on model weights and data a run may download, in megabytes.",
+    ),
+]
+ResultsOutOption = Annotated[
+    Path | None, typer.Option("--results-out", help="Write the raw results.json here.")
+]
+WorkdirOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--workdir",
+        help="Keep the sandbox here instead of a temp directory that is deleted afterwards.",
+    ),
+]
+PlanCacheOption = Annotated[
+    Path | None,
+    typer.Option("--plan-cache", help="Directory for cached script-to-table mappings."),
+]
+RefreshPlanOption = Annotated[
+    bool, typer.Option("--refresh-plan", help="Recompute the mapping, ignoring any cached plan.")
+]
+AllowDirtyOption = Annotated[
+    bool,
+    typer.Option(
+        "--allow-dirty",
+        help="Run against a local repo with uncommitted changes; the report cannot then name "
+        "a commit anyone else can check out.",
+    ),
+]
+CommittedArtifactsOption = Annotated[
+    bool,
+    typer.Option(
+        "--committed-artifacts/--no-committed-artifacts",
+        help="When a script cannot be re-run, aggregate the artifacts committed to the repo "
+        "instead, saying so in the report. Off means those cells report the blocker.",
     ),
 ]
 
@@ -185,37 +232,111 @@ def run(
     repo: RepoOption = None,
     max_hours: MaxHoursOption = 2.0,
     max_gpu: MaxGpuOption = 1.0,
+    max_download_mb: MaxDownloadOption = 512.0,
     tolerance: ToleranceOption = None,
     tolerance_config: ToleranceConfigOption = None,
     out: OutOption = None,
+    results_out: ResultsOutOption = None,
+    workdir: WorkdirOption = None,
+    plan_cache: PlanCacheOption = None,
+    refresh_plan: RefreshPlanOption = False,
+    allow_dirty: AllowDirtyOption = False,
+    committed_artifacts: CommittedArtifactsOption = True,
 ) -> None:
-    """Run the full pipeline: extract, reproduce, and diff.
+    """Run the full pipeline: extract the paper, reproduce it, and diff.
 
-    The execution half is milestone 2. Extraction runs today so the command is
-    useful now and the argument surface is already the final one.
+    The repo is copied into a sandbox workdir and never mutated. Budgets are
+    hard ceilings: a run whose estimate alone breaches one is refused before it
+    starts, and a run that breaches one mid-flight is killed.
     """
-    document, source_meta = _load_source_document(source)
+    if repo is None:
+        err_console.print(
+            "[red]error:[/red] --repo is required; recheck cannot reproduce a paper without "
+            "the code that produced it. Use `recheck extract` for the paper side alone."
+        )
+        raise typer.Exit(code=2)
+
+    try:
+        document, source_meta = _load_source_document(source)
+    except FetchError as exc:
+        err_console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
     paper = extract_tables(document, source=source_meta)
     numeric = sum(1 for t in paper.tables for c in t.cells if c.is_numeric)
     console.print(
         f"Extracted [bold]{len(paper.tables)}[/bold] tables "
         f"([bold]{numeric}[/bold] numeric cells) from {source}."
     )
-    console.print(
-        "[yellow]Execution is not implemented yet (milestone 2).[/yellow] "
-        "Budgets accepted but unused: "
-        f"--max-hours {max_hours}, --max-gpu {max_gpu}"
-        + (f", --repo {repo}" if repo else "")
-        + (f", --tolerance {tolerance}" if tolerance else "")
-        + (f", --tolerance-config {tolerance_config}" if tolerance_config else "")
-    )
-    console.print(
-        "Run [bold]recheck extract[/bold] to save paper.json, then "
-        "[bold]recheck diff[/bold] against a results file."
-    )
+
+    with _sandbox_root(workdir) as root:
+        try:
+            acquired = acquire(repo, root / "repo", allow_dirty=allow_dirty)
+        except RepoError as exc:
+            err_console.print(f"[red]error:[/red] {exc}")
+            raise typer.Exit(code=2) from exc
+        console.print(f"Acquired [bold]{repo}[/bold] at commit [bold]{acquired.commit}[/bold].")
+
+        options = RunOptions(
+            budget=Budget(
+                max_hours=max_hours, max_gpu_hours=max_gpu, max_download_mb=max_download_mb
+            ),
+            allow_committed_artifacts=committed_artifacts,
+            plan_cache_dir=plan_cache or default_cache_dir(),
+            refresh_plan=refresh_plan,
+        )
+        report = execute(paper, acquired, LocalSandbox(root), options)
+
+        if results_out is not None:
+            results_out.parent.mkdir(parents=True, exist_ok=True)
+            results_out.write_text(
+                json.dumps(report.results.to_dict(), indent=2, ensure_ascii=False) + "\n"
+            )
+            console.print(f"Results written → {results_out}")
+        if report.plan_path is not None:
+            console.print(f"[dim]Mapping cached → {report.plan_path}[/dim]")
+
+        _render_run(report, paper, tolerance, tolerance_config, out)
+
+
+def _render_run(
+    report: ExecutionReport,
+    paper: Paper,
+    tolerance: str | None,
+    tolerance_config: Path | None,
+    out: Path | None,
+) -> None:
+    try:
+        policy, _ = resolve_policy(
+            tolerance_config, parse_tolerance(tolerance) if tolerance else None
+        )
+    except (ConfigError, ValueError) as exc:
+        err_console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
+    diff_report = compare(paper, report.results, policy)
     if out is not None:
-        console.print(f"[dim]--out {out} will receive the report once execution lands.[/dim]")
-    raise typer.Exit(code=3)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(render_markdown(diff_report))
+        console.print(f"Report written → {out}")
+    render_terminal(diff_report, console)
+
+    if diff_report.counts()[Status.RED]:
+        raise typer.Exit(code=1)
+
+
+@contextmanager
+def _sandbox_root(workdir: Path | None) -> Iterator[Path]:
+    """Where the run happens. A temp dir unless the user wants to keep it."""
+    if workdir is not None:
+        workdir.mkdir(parents=True, exist_ok=True)
+        yield workdir
+        return
+    temporary = tempfile.mkdtemp(prefix="recheck-")
+    try:
+        yield Path(temporary)
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
 
 
 if __name__ == "__main__":
