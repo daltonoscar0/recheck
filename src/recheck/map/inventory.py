@@ -37,6 +37,7 @@ MAX_SCRIPT_BYTES = 1024 * 1024
 
 #: Above this many distinct values a column is data, not a category to filter on.
 MAX_CATEGORY_CARDINALITY = 64
+MAX_OBSERVED_ROWS = 2000
 
 #: Requirement sources, in the resolution order documented in docs/SCHEMA.md.
 REQUIREMENT_FILES = ("requirements.txt", "pyproject.toml", "environment.yml", "environment.yaml")
@@ -75,6 +76,40 @@ class TabularArtifact:
     categories: dict[str, list[str]] = field(default_factory=dict)
     """Low-cardinality columns and their distinct values, in first-seen order."""
     numeric_columns: list[str] = field(default_factory=list)
+    observed: list[dict[str, str]] = field(default_factory=list)
+    """Distinct combinations of categorical values actually present in the file."""
+
+    def candidates_for(
+        self, name: str, given: dict[str, str], column: str | None = None
+    ) -> list[tuple[str, str]]:
+        """Values that partially match `name`, among rows consistent with `given`.
+
+        A paper column headed `md` has to be resolved against corpus values like
+        `bllip-md` and `bllip-md-gptbpe`. Which one is right depends on the row:
+        this paper's GPT-2 was trained on the BPE variants and its LSTM was not.
+        Restricting to rows that actually carry the filters already established
+        for this cell is what makes that answerable from the data rather than
+        guessed from the string.
+        """
+        from .tokens import partial_name_match
+
+        rows = [
+            row
+            for row in self.observed
+            if all(row.get(col) == value for col, value in given.items())
+        ] or self.observed
+
+        out: list[tuple[str, str]] = []
+        for candidate_column, values in self.categories.items():
+            if candidate_column in given or (column and candidate_column != column):
+                continue
+            present = {row.get(candidate_column) for row in rows}
+            for value in values:
+                if value in present and partial_name_match(name, value):
+                    pair = (candidate_column, value)
+                    if pair not in out:
+                        out.append(pair)
+        return out
 
     def category_column_for(self, name: str) -> tuple[str, str] | None:
         """Find `(column, value)` whose value is this name, or None."""
@@ -135,8 +170,15 @@ def sniff_artifact(path: Path, root: Path) -> TabularArtifact | None:
             seen: dict[str, set[str]] = {c: set() for c in columns}
             numeric_ok = dict.fromkeys(columns, True)
             n_rows = 0
+            observed: list[dict[str, str]] = []
+            observed_seen: set[tuple[tuple[str, str], ...]] = set()
             for row in reader:
                 n_rows += 1
+                cells = {c: (row.get(c) or "").strip() for c in columns}
+                key = tuple(sorted(cells.items()))
+                if key not in observed_seen and len(observed_seen) <= MAX_OBSERVED_ROWS:
+                    observed_seen.add(key)
+                    observed.append(cells)
                 for column in columns:
                     raw = (row.get(column) or "").strip()
                     if not raw:
@@ -160,6 +202,7 @@ def sniff_artifact(path: Path, root: Path) -> TabularArtifact | None:
         n_rows=n_rows,
         categories=categories,
         numeric_columns=[c for c in columns if numeric_ok[c]],
+        observed=[{c: v for c, v in row.items() if c in categories} for row in observed],
     )
 
 

@@ -15,10 +15,13 @@ dropped in later without the pipeline ever depending on it being right.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
 from ..diff.taxonomy import FailureCode
 from ..schema import Cell, Paper, Table
+from .aliases import AliasTable
+from .aliases import build as build_aliases
 from .analysis import model_enumerations, names_a_model, produces
 from .inventory import RepoInventory, TabularArtifact
 from .plan import (
@@ -32,7 +35,13 @@ from .plan import (
     Statistic,
     TablePlan,
 )
-from .tokens import content_tokens, is_difference_marker, normalize, normalized_phrases
+from .tokens import (
+    content_tokens,
+    expand_synonyms,
+    is_difference_marker,
+    normalize,
+    normalized_phrases,
+)
 
 #: A candidate entry point scoring below this is not worth naming as one.
 CONFIDENCE_FLOOR = 1.0
@@ -70,13 +79,19 @@ class DeterministicMapper:
     name = "deterministic"
 
     def map_paper(self, paper: Paper, inventory: RepoInventory, commit: str) -> RepoPlan:
+        # Harvested once per repo: the aliases a repo declares between its own
+        # identifiers and the paper's names are a property of the repo, not of
+        # any one table.
+        aliases = build_aliases(inventory)
         return RepoPlan(
             commit=commit,
             mapper=self.name,
-            tables=[self.map_table(table, inventory) for table in paper.tables],
+            tables=[self.map_table(table, inventory, aliases) for table in paper.tables],
         )
 
-    def map_table(self, table: Table, inventory: RepoInventory) -> TablePlan:
+    def map_table(
+        self, table: Table, inventory: RepoInventory, aliases: AliasTable | None = None
+    ) -> TablePlan:
         numeric = [cell for cell in table.cells if cell.is_numeric]
         plan = TablePlan(
             table_id=table.id,
@@ -99,7 +114,8 @@ class DeterministicMapper:
             if _is_difference_cell(cell):
                 continue
             recipe, failure = _recipe_for(
-                cell, numeric, inventory, wanted, caption_phrases, claimed
+                cell, numeric, inventory, wanted, caption_phrases, claimed,
+                aliases or AliasTable(),
             )
             if recipe is not None:
                 resolved[cell.address] = recipe
@@ -204,8 +220,29 @@ def _claimed_columns(cells: list[Cell], inventory: RepoInventory) -> set[str]:
     return claimed
 
 
+@dataclass(frozen=True)
+class _Ambiguous:
+    """Why an artifact that aligns to a cell still cannot answer it."""
+
+    name: str
+    column: str
+    values: tuple[str, ...]
+    path: str
+
+    @property
+    def evidence(self) -> str:
+        return (
+            f"{self.path} aligns to this cell, but {self.name!r} matches "
+            f"{len(self.values)} values in its {self.column!r} column "
+            f"({', '.join(self.values)}); the data cannot say which the paper meant"
+        )
+
+
 def _score_artifact(
-    artifact: TabularArtifact, names: list[str], wanted: set[str]
+    artifact: TabularArtifact,
+    names: list[str],
+    wanted: set[str],
+    aliases: AliasTable | None = None,
 ) -> tuple[float, dict[str, tuple[str, str]]] | None:
     """Score an artifact for one cell, or None when it cannot account for a name.
 
@@ -218,16 +255,49 @@ def _score_artifact(
     filters: dict[str, tuple[str, str]] = {}
     by_filename = 0
     by_category = 0
+    deferred: list[str] = []
     for name in names:
         match = artifact.category_column_for(name)
         in_filename = artifact.filename_matches(name)
+        if match is None and aliases is not None:
+            # The repo may state the equivalence itself: a paper's `LSTM` and a
+            # CSV's `vanilla` are bridged only by the repo saying so.
+            for other, _alias in aliases.for_name(name):
+                match = artifact.category_column_for(other)
+                if match is not None:
+                    break
+                if not in_filename and artifact.filename_matches(other):
+                    in_filename = True
+                    break
         if match is not None:
             filters[name] = match
             by_category += 1
         if in_filename:
             by_filename += 1
         if match is None and not in_filename:
+            # No exact or declared match. A name like `md` may still resolve
+            # against qualified values (`bllip-md`), but only once the filters
+            # this cell already established narrow the rows — so defer it.
+            deferred.append(name)
+
+    for name in deferred:
+        given = {column: value for column, value in filters.values()}
+        candidates = artifact.candidates_for(name, given)
+        if len(candidates) > 1:
+            # More than one means the data cannot say which, and guessing here
+            # is how a report becomes confidently wrong about a paper. Report
+            # the ambiguity rather than letting a vaguer heuristic explain it.
+            column = candidates[0][0]
+            return _Ambiguous(
+                name=name,
+                column=column,
+                values=tuple(value for _, value in candidates),
+                path=artifact.path,
+            )
+        if not candidates:
             return None
+        filters[name] = candidates[0]
+        by_category += 1
 
     path_tokens = content_tokens(artifact.path)
     from_address = "".join(normalize(name) for name in names)
@@ -244,7 +314,7 @@ def _pick_value_column(
     for column in artifact.numeric_columns:
         if column in exclude:
             continue
-        overlap = len(content_tokens(column) & wanted)
+        overlap = len(expand_synonyms(content_tokens(column)) & expand_synonyms(wanted))
         if overlap:
             scored.append((overlap, column))
     if not scored:
@@ -268,21 +338,54 @@ def _recipe_for(
     wanted: set[str],
     caption_phrases: set[str],
     claimed: set[str],
+    aliases: AliasTable | None = None,
 ) -> tuple[AggregateRecipe | None, PlanFailure | None]:
     names = _address_names(cell)
     scored = []
+    ambiguities: list[_Ambiguous] = []
     for artifact in inventory.artifacts:
-        result = _score_artifact(artifact, names, wanted)
-        if result is not None:
+        result = _score_artifact(artifact, names, wanted, aliases)
+        if isinstance(result, _Ambiguous):
+            ambiguities.append(result)
+        elif result is not None:
             scored.append((result[0], artifact, result[1]))
 
     if not scored:
+        if ambiguities:
+            # A named ambiguity is a truer account than "nothing produces this".
+            return None, PlanFailure(
+                code=FailureCode.SCRIPT_NOT_FOUND, evidence=ambiguities[0].evidence
+            )
         code, evidence = _unmatched_code(cell, peers, inventory)
         return None, PlanFailure(code=code, evidence=evidence)
 
     scored.sort(key=lambda item: (-item[0], item[1].path))
-    _, artifact, name_filters = scored[0]
 
+    # Try candidates best-first. A file can align to a cell's names and still be
+    # unable to answer the question the table asks — a per-model results file
+    # whose only numeric column is an item index, say. That is a reason to fall
+    # through to the next candidate, not to give up on the cell.
+    last_failure: PlanFailure | None = None
+    for _, artifact, name_filters in scored:
+        recipe, failure = _recipe_from_artifact(
+            cell, artifact, name_filters, wanted, caption_phrases, claimed
+        )
+        if recipe is not None:
+            return recipe, None
+        last_failure = failure
+    assert last_failure is not None
+    return None, last_failure
+
+
+def _recipe_from_artifact(
+    cell: Cell,
+    artifact: TabularArtifact,
+    name_filters: dict[str, tuple[str, str]],
+    wanted: set[str],
+    caption_phrases: set[str],
+    claimed: set[str],
+) -> tuple[AggregateRecipe | None, PlanFailure | None]:
+    names = _address_names(cell)
     filters = [Filter(column=column, value=value) for column, value in name_filters.values()]
     filter_columns = {f.column for f in filters}
 

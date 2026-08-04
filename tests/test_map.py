@@ -214,3 +214,46 @@ class TestPlanCache:
         text = path.read_text()
         assert "results/scores_tiny.csv" in text
         assert "value_column" in text
+
+
+class TestQualifiedValueMatching:
+    """A paper column headed `md` against corpus values like `bllip-md`."""
+
+    def _artifact(self):
+        from recheck.map.inventory import TabularArtifact
+
+        return TabularArtifact(
+            path="data/perplexity.csv",
+            columns=["model", "corpus", "ppl"],
+            n_rows=6,
+            categories={
+                "model": ["vanilla", "gpt-2"],
+                "corpus": ["bllip-xs", "bllip-md", "bllip-md-gptbpe"],
+            },
+            numeric_columns=["ppl"],
+            observed=[
+                {"model": "vanilla", "corpus": "bllip-xs"},
+                {"model": "vanilla", "corpus": "bllip-md"},
+                {"model": "gpt-2", "corpus": "bllip-md"},
+                {"model": "gpt-2", "corpus": "bllip-md-gptbpe"},
+            ],
+        )
+
+    def test_a_unique_qualified_value_resolves(self) -> None:
+        assert self._artifact().candidates_for("xs", {"model": "vanilla"}) == [
+            ("corpus", "bllip-xs")
+        ]
+
+    def test_filters_restrict_which_rows_count(self) -> None:
+        # vanilla was only ever run on bllip-md, so `md` is unambiguous for it.
+        assert self._artifact().candidates_for("md", {"model": "vanilla"}) == [
+            ("corpus", "bllip-md")
+        ]
+
+    def test_a_genuine_ambiguity_returns_every_candidate(self) -> None:
+        # gpt-2 has both; guessing here would misreport the paper.
+        candidates = self._artifact().candidates_for("md", {"model": "gpt-2"})
+        assert {value for _, value in candidates} == {"bllip-md", "bllip-md-gptbpe"}
+
+    def test_an_unmatched_name_yields_nothing(self) -> None:
+        assert self._artifact().candidates_for("lg", {"model": "vanilla"}) == []

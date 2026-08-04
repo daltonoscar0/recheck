@@ -438,7 +438,11 @@ def flatten(text: str) -> str:
     text = re.sub(r"\\(?:bf|it|sf|tt|rm|bfseries|itshape|ttfamily|sc)\b", " ", text)
     for pattern, replacement in _SYMBOL_REPLACEMENTS:
         text = re.sub(pattern, replacement, text)
-    text = re.sub(r"\$+", " ", text)
+    # Math delimiters vanish rather than becoming spaces: `$n$-gram` is one
+    # word, and turning it into "n -gram" corrupts the cell address a results
+    # file has to join against. Real spacing around math is preserved because
+    # it lives outside the delimiters.
+    text = re.sub(r"\$+", "", text)
     text = re.sub(r"\\[a-zA-Z@]+\*?", " ", text)  # any surviving command
     # Collapse sub/superscript groups before braces become spaces, so
     # `d_{\text{model}}` reads as "d_model" rather than "d_ model".

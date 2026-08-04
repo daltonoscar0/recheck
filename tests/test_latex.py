@@ -183,3 +183,11 @@ class TestMacroExpansion:
         # as an unknown command and the cell read "_ls".
         assert flatten(r"$\epsilon_{ls}$") == "ε_ls"
         assert flatten(r"$\Delta_{x}$") == "Δ_x"
+
+    def test_math_delimiters_do_not_split_a_word(self) -> None:
+        # `$n$-gram` is one token; "n -gram" would corrupt the cell address.
+        assert flatten(r"$n$-gram") == "n-gram"
+        assert flatten(r"$k$-NN") == "k-NN"
+
+    def test_real_spacing_around_math_survives(self) -> None:
+        assert flatten(r"$a$ and $b$") == "a and b"

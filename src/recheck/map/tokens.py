@@ -114,3 +114,42 @@ def same_name(left: str, right: str) -> bool:
     by the paper's `Ambiguous`.
     """
     return normalize(left) == normalize(right) != ""
+
+
+def partial_name_match(name: str, value: str) -> bool:
+    """Does `value` name the same thing as `name`, allowing extra qualifiers?
+
+    `xs` matches `bllip-xs`; `md` matches both `bllip-md` and `bllip-md-gptbpe`.
+    Deliberately permissive, because the caller resolves the resulting ambiguity
+    against the data rather than by picking a winner here. The token must appear
+    whole — `sm` must not match `bllip-small-md` on a substring.
+    """
+    if same_name(name, value):
+        return True
+    wanted = [t for t in tokenize(name) if t]
+    if not wanted:
+        return False
+    present = [t for t in tokenize(value) if t]
+    return all(token in present for token in wanted)
+
+
+#: Abbreviations a results column uses for a quantity a caption spells out.
+#: Deliberately tiny and domain-specific: every entry is a convention a reader
+#: would resolve without thinking, and a wrong entry silently mis-reads a table.
+_SYNONYMS = {
+    "ppl": "perplexity",
+    "perplexity": "ppl",
+    "acc": "accuracy",
+    "accuracy": "acc",
+    "loglik": "loglikelihood",
+    "dll": "deltaloglikelihood",
+    "rt": "readingtime",
+    "sd": "stdev",
+    "std": "stdev",
+    "surp": "surprisal",
+}
+
+
+def expand_synonyms(tokens: set[str]) -> set[str]:
+    """Add the conventional long or short form of each token."""
+    return tokens | {_SYNONYMS[t] for t in tokens if t in _SYNONYMS}
