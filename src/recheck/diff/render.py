@@ -101,9 +101,9 @@ def render_terminal(report: DiffReport, console: Console | None = None) -> None:
         console.print(Text(f"Provenance: {report.run['note']}", style="dim"))
         console.print()
 
-    for table_index, comparisons in sorted(report.by_table().items()):
+    for table_label, comparisons in report.by_table().items():
         grid = RichTable(
-            title=f"Table {table_index}",
+            title=table_label,
             title_justify="left",
             header_style="bold",
             expand=False,
@@ -184,8 +184,8 @@ def render_markdown(report: DiffReport) -> str:
             lines.append(f"| {STATUS_BADGE[status]} | {counts[status]} |")
     lines.append("")
 
-    for table_index, comparisons in sorted(report.by_table().items()):
-        lines.append(f"## Table {table_index}")
+    for table_label, comparisons in report.by_table().items():
+        lines.append(f"## {table_label}")
         lines.append("")
         lines.append("| | Cell | Paper | Rerun | Δ | Reason |")
         lines.append("| :-: | --- | ---: | ---: | ---: | --- |")

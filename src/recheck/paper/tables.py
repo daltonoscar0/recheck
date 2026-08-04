@@ -247,7 +247,9 @@ def _is_section_row(row: _Row, ncols: int) -> bool:
     return col == 0 and placed.colspan >= ncols > 1 and bool(flatten(placed.raw))
 
 
-def _extract_table(env: Environment, index: int, tabular: Environment) -> Table | None:
+def _extract_table(
+    env: Environment, index: int, tabular: Environment, *, inline: bool = False
+) -> Table | None:
     body = _strip_tabular_preamble(tabular.name, tabular.inner)
     rows = _parse_grid(body)
     if not rows:
@@ -295,7 +297,7 @@ def _extract_table(env: Environment, index: int, tabular: Environment) -> Table 
                 # An unlabelled column still needs a stable, unique address.
                 col_path = [f"column {col + 1}"]
 
-            address = make_address(index, row_labels, col_path)
+            address = make_address(index, row_labels, col_path, inline=inline)
             seen = used_addresses.get(address, 0)
             used_addresses[address] = seen + 1
             if seen:
@@ -372,6 +374,7 @@ def extract_tables(document: str, source: dict | None = None) -> Paper:
     """Extract every table float in a LaTeX document into a `Paper`."""
     document = expand_macros(strip_comments(document))
     tables: list[Table] = []
+    inline: list[Table] = []
     consumed: list[tuple[int, int]] = []
 
     for env in find_environments(document, FLOAT_ENVIRONMENTS):
@@ -379,7 +382,7 @@ def extract_tables(document: str, source: dict | None = None) -> Paper:
         if not inner_tabulars:
             continue
         table = _extract_table(env, len(tables) + 1, inner_tabulars[0])
-        if table is not None:
+        if table is not None and table.cells:
             tables.append(table)
         consumed.append((env.start, env.end))
 
@@ -389,10 +392,16 @@ def extract_tables(document: str, source: dict | None = None) -> Paper:
             continue
         env = Environment(name=tabular.name, inner=tabular.inner, start=tabular.start,
                           end=tabular.end)
-        table = _extract_table(env, len(tables) + 1, tabular)
-        if table is not None:
-            tables.append(table)
+        # Numbered separately: a paper's Table 7 is its seventh *float*, and a
+        # loose tabular must not push that number along.
+        table = _extract_table(env, len(inline) + 1, tabular, inline=True)
+        # A tabular with no data cells is layout, not a result table: papers use
+        # them for instruction boxes and example transcripts. Emitting them
+        # would consume table numbers and silently shift every later address.
+        if table is not None and table.cells:
+            inline.append(table)
 
+    tables.extend(inline)
     paper = Paper(tables=tables, source=source or {})
     _attach_context(paper, document)
     return paper

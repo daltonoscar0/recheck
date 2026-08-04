@@ -67,6 +67,16 @@ without real-paper fixtures.
 it as the bare mantissa `2.3` would be off by nineteen orders of magnitude in
 exactly the cost and parameter-count columns people care about.
 
+**`Table N` counts floats; loose tabulars are `Inline table N`.** Sweeping
+twelve arXiv papers showed GPT-3 extracting 83 tables against 21 floats: sixty
+task-example boxes were consuming numbers, so recheck's "Table 18" was not the
+paper's Table 18. Since the address is the join key *and* what a reader sees,
+that made the tool confidently wrong about which table it was checking.
+
+**A tabular with no data cells is not emitted.** The same sweep found 23 such
+"tables" — instruction excerpts and transcript boxes. They carry nothing
+checkable and every one of them shifted the numbering of the tables after it.
+
 **Unlabelled tables get `table-N`.** Papers cite by number, and a synthetic id
 keeps the JSON keyable. Real `\label`s are preferred when present.
 

@@ -73,9 +73,17 @@ class CellComparison:
     notes: list[str] = field(default_factory=list)
 
     @property
-    def table_index(self) -> int:
-        match = re.match(r"Table (\d+)", self.address)
-        return int(match.group(1)) if match else 0
+    def table_key(self) -> tuple[int, int]:
+        """Sort key: floats first in paper order, then inline tables."""
+        match = re.match(r"(Inline table|Table) (\d+)", self.address)
+        if not match:
+            return (2, 0)
+        return (1 if match.group(1) == "Inline table" else 0, int(match.group(2)))
+
+    @property
+    def table_label(self) -> str:
+        match = re.match(r"((?:Inline table|Table) \d+)", self.address)
+        return match.group(1) if match else "Table"
 
 
 @dataclass
@@ -100,10 +108,11 @@ class DiffReport:
         counts = self.counts()
         return counts[Status.GREEN] + counts[Status.YELLOW] + counts[Status.RED]
 
-    def by_table(self) -> dict[int, list[CellComparison]]:
-        grouped: dict[int, list[CellComparison]] = {}
-        for comparison in self.comparisons:
-            grouped.setdefault(comparison.table_index, []).append(comparison)
+    def by_table(self) -> dict[str, list[CellComparison]]:
+        """Comparisons grouped by their table's label, in paper order."""
+        grouped: dict[str, list[CellComparison]] = {}
+        for comparison in sorted(self.comparisons, key=lambda c: c.table_key):
+            grouped.setdefault(comparison.table_label, []).append(comparison)
         return grouped
 
 

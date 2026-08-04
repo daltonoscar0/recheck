@@ -263,6 +263,15 @@ def _require_version(version: str | None, what: str) -> None:
         )
 
 
-def make_address(table_index: int, row_path: list[str], col_path: list[str]) -> str:
-    parts = [f"Table {table_index}", *(p for p in row_path if p), *(p for p in col_path if p)]
+#: Addresses of tables typeset outside a numbered float. They are kept separate
+#: so "Table 7" always means the paper's Table 7: a paper with sixty layout
+#: tabulars must not renumber its real tables out from under the reader.
+INLINE_LABEL = "Inline table"
+
+
+def make_address(
+    table_index: int, row_path: list[str], col_path: list[str], *, inline: bool = False
+) -> str:
+    label = f"{INLINE_LABEL} {table_index}" if inline else f"Table {table_index}"
+    parts = [label, *(p for p in row_path if p), *(p for p in col_path if p)]
     return ADDRESS_SEP.join(parts)

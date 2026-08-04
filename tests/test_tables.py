@@ -174,3 +174,78 @@ class TestGoldenFiles:
     def test_every_fixture_has_a_golden_file(self) -> None:
         on_disk = {p.stem for p in GOLDEN.glob("*.json")}
         assert on_disk == set(FIXTURE_NAMES)
+
+
+class TestLayoutTabularsAreNotTables:
+    """A tabular with no data cells is layout, and numbering must skip it."""
+
+    LAYOUT = r"""
+    \begin{table}
+    \begin{tabular}{l}
+    Excerpt of labeling instructions \\
+    \end{tabular}
+    \end{table}
+
+    \begin{table}
+    \caption{Real results}
+    \label{tab:real}
+    \begin{tabular}{lc}
+    Model & Score \\
+    \midrule
+    A & 1.0 \\
+    \end{tabular}
+    \end{table}
+    """
+
+    def test_an_empty_tabular_is_dropped(self) -> None:
+        assert [t.id for t in extract_tables(self.LAYOUT).tables] == ["tab:real"]
+
+    def test_numbering_does_not_skip(self) -> None:
+        # The layout float must not consume "Table 1" and push the real table
+        # to "Table 2" — the address is what a results file joins against.
+        paper = extract_tables(self.LAYOUT)
+        assert paper.tables[0].index == 1
+        assert all(c.address.startswith("Table 1 ") for c in paper.tables[0].cells)
+
+
+class TestMultiLineHeaderCells:
+    def test_a_nested_row_break_becomes_a_space(self) -> None:
+        doc = r"""
+        \begin{tabular}{lc}
+        Model & \makecell{Total train \\ (flops)} \\
+        \midrule
+        GPT-3 & 3.14 \\
+        \end{tabular}
+        """
+        cell = extract_tables(doc).tables[0].cells[0]
+        assert "\\" not in cell.address
+        # A loose tabular is addressed as inline, not as the paper's Table 1.
+        assert cell.address == "Inline table 1 › GPT-3 › Total train (flops)"
+
+
+class TestFloatNumberingIsThePapersNumbering:
+    DOC = r"""
+    \begin{tabular}{lc}
+    Note & 1.0 \\
+    \end{tabular}
+
+    \begin{table}
+    \caption{First real table}
+    \begin{tabular}{lc}
+    Model & Score \\
+    \midrule
+    A & 2.0 \\
+    \end{tabular}
+    \end{table}
+    """
+
+    def test_a_loose_tabular_does_not_consume_table_one(self) -> None:
+        # The float is the paper's Table 1 even though a tabular precedes it.
+        paper = extract_tables(self.DOC)
+        floats = [t for t in paper.tables if t.caption]
+        assert any(c.address.startswith("Table 1 ") for c in floats[0].cells)
+
+    def test_loose_tabulars_are_addressed_separately(self) -> None:
+        addresses = [c.address for t in extract_tables(self.DOC).tables for c in t.cells]
+        assert any(a.startswith("Inline table 1 ") for a in addresses)
+        assert sum(a.startswith("Table 1 ") for a in addresses) == 1

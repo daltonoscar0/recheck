@@ -31,6 +31,11 @@ The separator is `" › "` (U+203A with single spaces). Rules:
 - A column with no header text gets `column N` so the address stays unique.
 - If two cells still resolve to the same address, later ones get a ` #2`,
   ` #3` suffix in document order.
+- `Table N` counts **numbered floats only**, so it matches the paper's own
+  numbering. A table typeset outside a float is addressed `Inline table N`
+  in its own sequence — otherwise a paper with sixty layout tabulars would
+  renumber its real tables out from under the reader.
+- A tabular with no data cells is layout, not a table, and is not emitted.
 
 Addresses are stable under reformatting of the LaTeX but **not** under
 renaming a model or reordering tables. Treat them as content-derived keys,

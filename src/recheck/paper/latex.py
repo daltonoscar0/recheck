@@ -16,6 +16,7 @@ _TRANSPARENT = {
     "textbf", "textit", "texttt", "textrm", "textsf", "textsc", "emph",
     "mathbf", "mathrm", "mathit", "mathsf", "boldmath", "bm",
     "text", "mbox", "operatorname", "mathcal", "mathbb", "mathfrak", "textnormal",
+    "makecell", "thead", "shortstack", "tabincell",
     "small", "footnotesize", "scriptsize", "large", "Large", "normalsize",
     "centering", "raggedright", "raggedleft", "color", "textcolor",
 }
@@ -410,6 +411,10 @@ def flatten(text: str) -> str:
     characters they render as, and everything left over is dropped. The result
     is what a reader would see, which is what a cell address should contain.
     """
+    # A `\\` still present here is a line break *inside* a cell — row splitting
+    # already consumed the top-level ones — so it renders as a space. Left alone
+    # it lands in the cell address as a literal backslash.
+    text = re.sub(r"\\\\|\\newline\b", " ", text)
     text = _PARTIAL_RULE.sub(" ", text)
     for name, arg_count in _DROP_WITH_ARG:
         while True:
