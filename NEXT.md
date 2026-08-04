@@ -110,8 +110,52 @@ people understand what this is, and it is the frame worth choosing carefully.
   commit that deliberately bumps the schema.
 - README GIF in place, roadmap marked done.
 
+## Confirmed defects still open
+
+From a 35-agent adversarial audit: 21 proposed, 20 survived independent
+refutation, 11 fixed. These are the survivors, with the anchors the verifiers
+corrected. Each has a described failure scenario; none is speculative.
+
+- **`runner.py:300`** — the environment is built with `timeout=remaining_seconds()`
+  *before* the `deadline <= 0` BUDGET_EXCEEDED guard at ~line 325. A wall budget
+  already spent lets the install run with a non-positive timeout instead of
+  refusing first.
+- **`runner.py:349`** — a process killed by a signal returns a negative
+  returncode with `timed_out` False, so it bypasses the BUDGET_EXCEEDED branch
+  and reaches `classify`, which attributes an OOM kill to the paper.
+- **`runner.py:146`** — after a table executes with unrouted cells the
+  loop-scope `inventory` is rebuilt, and every later table's `estimate_cost`
+  then runs against the post-execution tree rather than the one it was planned
+  against.
+- **`runner.py:343`** — the timeout is the unspent slice of the budget, but the
+  BUDGET_EXCEEDED evidence asserts the whole ceiling was consumed.
+- **`deterministic.py:402`** — `_pick_value_column` is passed `table_tokens`,
+  which includes *every* column header and the citing prose, so a numeric column
+  named for a different column's header can win the tie.
+- **`deterministic.py:189`** — `_difference_plan` neither accepts nor forwards
+  the alias table, so a derived cell cannot resolve a name its operands can.
+- **`cache.py:30`** — the plan records no mapper *version*, only its name, so a
+  changed mapper reuses plans it would no longer produce. (Paper identity is
+  now in the key; this half remains.)
+
+## Designs ready to implement
+
+The same audit produced full change plans, in the workflow transcript under
+`subagents/workflows/`: a `DockerSandbox` against the existing protocol —
+including which tests can run without a daemon and which need a marker like the
+existing `network` one — and per-cell provenance with a `SCHEMA_VERSION` bump to
+1.1, so a report can say which cells were freshly executed and which were read
+from committed files. Both are milestone-3 work.
+
 ## Known gaps carried forward
 
+- **No public paper has yet been executed end to end.** Eight candidates were
+  hunted and every one failed verification: the repos that commit their results
+  do not ship a cheap script that regenerates them, and the ones that do need a
+  GPU or model weights. Execution itself is proven — a test installs pandas the
+  repo never declared, runs the script, and reads back 0.85 where the committed
+  artifact says 0.10 — but on a synthetic repo. Finding a real one is the
+  remaining proof, and it may need a wider net than surprisal papers.
 - **No real LaTeX for the calibration paper.** `garden_path_calibration.tex` is
   a transcription; only a PDF exists locally. Export the source from Overleaf
   and point `recheck extract` at it. The paper side of calibration stays
