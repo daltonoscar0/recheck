@@ -79,15 +79,22 @@ class Environment:
     installed: list[str] = field(default_factory=list)
     venv: Path | None = None
     note: str = ""
+    inferred: list[str] = field(default_factory=list)
+    """Distributions installed that the repo never declared. Non-empty means the
+    run deviated from the paper's stated environment, and every report that
+    renders this must say so."""
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        out: dict[str, object] = {
             "requirements": self.source.path,
             "requirements_kind": self.source.kind,
             "python": self.python,
             "installed": self.installed,
             "note": self.note,
         }
+        if self.inferred:
+            out["inferred"] = self.inferred
+        return out
 
 
 def normalize_distribution(name: str) -> str:
@@ -187,16 +194,27 @@ def missing_dependency_evidence(
 
 
 def build(
-    sandbox: Sandbox, source: RequirementSource, *, timeout: float
+    sandbox: Sandbox,
+    source: RequirementSource,
+    *,
+    timeout: float,
+    inferred: frozenset[str] = frozenset(),
 ) -> tuple[Environment, CommandResult | None]:
     """Create the run environment. Returns it, plus the failing install if any.
 
     With no requirements file there is nothing to resolve, so the sandbox's
     interpreter is used directly and the report says so rather than implying an
     environment was reconstructed.
+
+    `inferred` holds distributions read off the script's imports because the repo
+    never declared them. Installing those is opt-in (`--install-inferred`) and is
+    a real deviation: the run no longer reproduces the environment the paper
+    specified, because the paper specified none. Every note this function writes
+    when `inferred` is non-empty says so, so the deviation cannot reach a reader
+    as an ordinary successful run.
     """
     python = sys.executable
-    if source.kind == EnvKind.NONE:
+    if source.kind == EnvKind.NONE and not inferred:
         return (
             Environment(
                 source=source,
@@ -213,6 +231,13 @@ def build(
             None,
         )
 
+    inferred_note = (
+        f"; plus {len(inferred)} package(s) the repo never declared, inferred from imports: "
+        f"{', '.join(sorted(inferred))}"
+        if inferred
+        else ""
+    )
+
     venv = sandbox.root / "venv"
     created = sandbox.run(["uv", "venv", "--python", python, str(venv)], timeout=timeout)
     if not created.ok:
@@ -223,16 +248,16 @@ def build(
         )
 
     interpreter = venv / "bin" / "python"
-    if source.kind != EnvKind.REQUIREMENTS:
-        install = sandbox.run(
-            ["uv", "pip", "install", "--python", str(interpreter), "."],
-            timeout=timeout,
-        )
+    if source.kind == EnvKind.NONE:
+        declared: list[str] = []
+    elif source.kind != EnvKind.REQUIREMENTS:
+        declared = ["."]
     else:
-        install = sandbox.run(
-            ["uv", "pip", "install", "--python", str(interpreter), "-r", source.path],
-            timeout=timeout,
-        )
+        declared = ["-r", source.path]
+
+    install_argv = ["uv", "pip", "install", "--python", str(interpreter), *declared,
+                    *sorted(inferred)]
+    install = sandbox.run(install_argv, timeout=timeout)
     if not install.ok:
         return Environment(source=source, python=str(interpreter), venv=venv), install
 
@@ -245,10 +270,40 @@ def build(
             python=str(interpreter),
             venv=venv,
             installed=sorted(frozen.stdout.split()) if frozen.ok else [],
-            note=f"installed from {source.path} with uv",
+            inferred=sorted(inferred),
+            note=(
+                f"installed from {source.path} with uv{inferred_note}"
+                if source.kind != EnvKind.NONE
+                else f"repo declares no dependencies{inferred_note or '; nothing installed'}"
+            ),
         ),
         None,
     )
+
+
+def install_extra(
+    sandbox: Sandbox, environment: Environment, extra: frozenset[str], *, timeout: float
+) -> CommandResult | None:
+    """Add distributions to an environment that was already built.
+
+    The environment is built once and reused across a paper's tables, so a table
+    reached later can need a package an earlier one did not. Without this it
+    would run against an environment missing its imports and fail at runtime
+    with an error that looks like the paper's fault rather than ours.
+    """
+    wanted = frozenset(extra) - set(environment.inferred)
+    if not wanted or environment.venv is None:
+        return None
+    interpreter = environment.venv / "bin" / "python"
+    result = sandbox.run(
+        ["uv", "pip", "install", "--python", str(interpreter), *sorted(wanted)],
+        timeout=timeout,
+    )
+    if not result.ok:
+        return result
+    environment.inferred = sorted(set(environment.inferred) | wanted)
+    environment.note += f"; later installed {', '.join(sorted(wanted))}"
+    return None
 
 
 def resolver_evidence(source: RequirementSource, result: CommandResult) -> str:

@@ -389,3 +389,76 @@ class TestDifferenceColumns:
         derived = cell(report, "huge › Δ")
         assert derived.failure_code == FailureCode.SCRIPT_NOT_FOUND.value
         assert "huge › dev" in derived.evidence
+
+
+UNDECLARED_SCRIPT = '''\
+import os
+
+import pandas as pd  # this repo never declares pandas anywhere
+
+os.makedirs("results", exist_ok=True)
+frame = pd.DataFrame(
+    [("tiny", "dev", 0.80), ("tiny", "dev", 0.90),
+     ("tiny", "test", 0.60), ("tiny", "test", 0.70)],
+    columns=["model", "split", "score"],
+)
+frame.to_csv("results/scores_tiny.csv", index=False)
+print("wrote", len(frame), "rows")
+'''
+
+#: The committed artifact holds values that are deliberately WRONG. If a run
+#: reports the paper's numbers, the only way it could have got them is by
+#: executing the script — falling back to the committed file would produce 0.1.
+STALE_SCORES_CSV = (
+    "model,split,score\n"
+    "tiny,dev,0.10\n"
+    "tiny,dev,0.10\n"
+    "tiny,test,0.10\n"
+    "tiny,test,0.10\n"
+)
+
+UNDECLARED_FILES = {
+    "run_eval.py": UNDECLARED_SCRIPT,
+    "results/scores_tiny.csv": STALE_SCORES_CSV,
+    "README.md": "# scores\n\nRun `python run_eval.py`.\n",
+}
+
+
+class TestInstallInferred:
+    """Installing packages a repo never declared is opt-in and always disclosed."""
+
+    def test_undeclared_imports_refuse_by_default(self, tmp_path) -> None:
+        report = run(tmp_path, UNDECLARED_FILES)
+        codes = {b.code for outcome in report.outcomes for b in outcome.blockers}
+        assert FailureCode.MISSING_DEPENDENCY in codes
+
+    def test_the_flag_records_what_it_installed(self, tmp_path) -> None:
+        report = run(tmp_path, UNDECLARED_FILES, install_inferred=True)
+        environment = report.results.run.get("environment", {})
+        assert "pandas" in environment.get("inferred", [])
+
+    def test_the_deviation_is_stated_against_the_table(self, tmp_path) -> None:
+        report = run(tmp_path, UNDECLARED_FILES, install_inferred=True)
+        caveats = " ".join(c for outcome in report.outcomes for c in outcome.caveats)
+        # These numbers came out of an environment the paper never specified,
+        # and a reader has to be able to see that next to them.
+        assert "inferred, not declared" in caveats
+        assert "pandas" in caveats
+
+    def test_the_script_actually_runs_and_its_numbers_are_used(self, tmp_path) -> None:
+        report = run(tmp_path, UNDECLARED_FILES, install_inferred=True)
+        codes = {b.code for outcome in report.outcomes for b in outcome.blockers}
+        assert FailureCode.MISSING_DEPENDENCY not in codes
+
+        # The committed file says 0.1; the script computes 0.85. Reading the
+        # paper's number back proves the code ran rather than being read.
+        dev = cell(report, "tiny › dev")
+        assert dev is not None and dev.value == pytest.approx(0.85)
+
+    def test_without_the_flag_the_stale_committed_value_is_all_there_is(self, tmp_path) -> None:
+        # The mirror image: refused install means the run cannot correct the
+        # stale artifact, and must not pretend otherwise.
+        report = run(tmp_path, UNDECLARED_FILES)
+        dev = cell(report, "tiny › dev")
+        assert dev is not None
+        assert dev.value is None or dev.value == pytest.approx(0.10)

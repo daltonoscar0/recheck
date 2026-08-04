@@ -89,6 +89,17 @@ PlanCacheOption = Annotated[
 RefreshPlanOption = Annotated[
     bool, typer.Option("--refresh-plan", help="Recompute the mapping, ignoring any cached plan.")
 ]
+InstallInferredOption = Annotated[
+    bool,
+    typer.Option(
+        "--install-inferred",
+        help=(
+            "Install packages a repo imports but never declares, instead of refusing. "
+            "The run then no longer reproduces the paper's stated environment, and the "
+            "report says so against every affected table."
+        ),
+    ),
+]
 AllowDirtyOption = Annotated[
     bool,
     typer.Option(
@@ -261,6 +272,7 @@ def run(
     workdir: WorkdirOption = None,
     plan_cache: PlanCacheOption = None,
     refresh_plan: RefreshPlanOption = False,
+    install_inferred: InstallInferredOption = False,
     allow_dirty: AllowDirtyOption = False,
     committed_artifacts: CommittedArtifactsOption = True,
 ) -> None:
@@ -305,6 +317,7 @@ def run(
             allow_committed_artifacts=committed_artifacts,
             plan_cache_dir=plan_cache or default_cache_dir(),
             refresh_plan=refresh_plan,
+            install_inferred=install_inferred,
         )
         report = execute(paper, acquired, LocalSandbox(root), options)
 

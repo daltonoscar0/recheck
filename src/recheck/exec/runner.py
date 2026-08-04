@@ -69,6 +69,12 @@ class RunOptions:
     allow_committed_artifacts: bool = True
     plan_cache_dir: Path | None = None
     refresh_plan: bool = False
+    install_inferred: bool = False
+    """Install packages a repo imports but never declares, instead of refusing.
+
+    Off by default on purpose. Inferring an environment is a guess about what the
+    authors ran, and a guess that silently succeeds is exactly what this tool
+    exists to prevent — so it is opt-in, and every run that uses it says so."""
 
 
 @dataclass
@@ -131,7 +137,7 @@ def execute(
 
     for index, table_plan in enumerate(plan.tables):
         outcome, environment = _run_table(
-            table_plan, inventory, repo, sandbox, ledger, requirements, environment
+            table_plan, inventory, repo, sandbox, ledger, requirements, environment, options
         )
         if outcome.status == EntryStatus.EXECUTED and _has_unrouted_cells(table_plan):
             # A repo that commits none of its outputs has nothing for the mapper
@@ -212,6 +218,7 @@ def _run_table(
     ledger: Ledger,
     requirements: env_module.RequirementSource,
     environment: env_module.Environment | None,
+    options: RunOptions,
 ) -> tuple[TableOutcome, env_module.Environment | None]:
     if not table_plan.cells:
         return TableOutcome(table_id=table_plan.table_id, status=EntryStatus.NONE), environment
@@ -246,12 +253,26 @@ def _run_table(
 
     # 1. Static checks. Free, and they name the most specific reason available.
     missing = env_module.unpinned_imports(script, requirements, inventory)
-    if missing:
+    inferred: frozenset[str] = frozenset()
+    if missing and not options.install_inferred:
         outcome.blockers.append(
             Blocker(
                 FailureCode.MISSING_DEPENDENCY,
                 env_module.missing_dependency_evidence(script, requirements, missing),
             )
+        )
+    elif missing:
+        inferred = frozenset(
+            env_module.normalize_distribution(env_module.IMPORT_ALIASES.get(module, module))
+            for module, _ in missing
+        )
+        # Loud, per table: these numbers came out of an environment the paper
+        # never specified, and a reader has to be able to see that next to them.
+        outcome.caveats.append(
+            f"environment inferred, not declared: installed "
+            f"{', '.join(sorted(inferred))} because {script.path} imports "
+            f"{', '.join(module for module, _ in missing)} and {requirements.describe()} "
+            f"does not provide {'them' if len(missing) > 1 else 'it'}"
         )
 
     if is_stochastic_without_seed(script):
@@ -272,21 +293,31 @@ def _run_table(
     if outcome.blockers:
         return outcome, environment
 
-    # 3. Build the environment only for a run that is going to happen.
-    if environment is None:
-        with Stopwatch(ledger) as watch:
+    # 3. Build the environment only for a run that is going to happen. It is
+    #    built once per run and reused, so a table reached later may need a
+    #    package an earlier one did not — top up rather than run without it.
+    failed_install: CommandResult | None = None
+    with Stopwatch(ledger) as watch:
+        if environment is None:
             environment, failed_install = env_module.build(
-                sandbox, requirements, timeout=ledger.remaining_seconds()
+                sandbox,
+                requirements,
+                timeout=ledger.remaining_seconds(),
+                inferred=inferred,
             )
-        outcome.seconds += watch.elapsed
-        if failed_install is not None:
-            outcome.blockers.append(
-                Blocker(
-                    FailureCode.ENV_UNRESOLVABLE,
-                    env_module.resolver_evidence(requirements, failed_install),
-                )
+        elif inferred:
+            failed_install = env_module.install_extra(
+                sandbox, environment, inferred, timeout=ledger.remaining_seconds()
             )
-            return outcome, environment
+    outcome.seconds += watch.elapsed
+    if failed_install is not None:
+        outcome.blockers.append(
+            Blocker(
+                FailureCode.ENV_UNRESOLVABLE,
+                env_module.resolver_evidence(requirements, failed_install),
+            )
+        )
+        return outcome, environment
 
     # 4. Run it, killed at the deadline.
     argv = [environment.python, *entry.argv[1:]] if entry.argv[0] == "python" else list(entry.argv)
