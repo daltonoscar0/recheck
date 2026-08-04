@@ -219,3 +219,38 @@ class TestStatusMarks:
             render_terminal(report, console)
             rendered.append(re.sub(r"\x1b\[[0-9;]*m", "", console.file.getvalue()))
         assert rendered[0] != rendered[1]
+
+
+class TestInferredEnvironmentIsSurfaced:
+    def _report(self):
+        report = compare(make_paper(1.0), make_results(value=1.0))
+        report.run = {"environment": {"inferred": ["pandas", "scipy"]}}
+        return report
+
+    def test_markdown_states_it_in_the_header(self) -> None:
+        from recheck.diff.render import render_markdown
+
+        markdown = render_markdown(self._report())
+        head = markdown.split("| Status |")[0]
+        assert "inferred, not declared" in head
+        assert "pandas" in head
+
+    def test_terminal_states_it_too(self) -> None:
+        import io
+        import re
+
+        from rich.console import Console
+
+        from recheck.diff.render import render_terminal
+
+        console = Console(file=io.StringIO(), width=120, no_color=True)
+        render_terminal(self._report(), console)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", console.file.getvalue())
+        assert "inferred, not declared" in plain
+
+    def test_a_declared_environment_adds_no_noise(self) -> None:
+        from recheck.diff.render import render_markdown
+
+        report = compare(make_paper(1.0), make_results(value=1.0))
+        report.run = {"environment": {"inferred": []}}
+        assert "inferred" not in render_markdown(report)

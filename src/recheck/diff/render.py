@@ -97,6 +97,15 @@ def render_terminal(report: DiffReport, console: Console | None = None) -> None:
     console = console or Console()
     counts = report.counts()
 
+    inferred = (report.run.get("environment") or {}).get("inferred") or []
+    if inferred:
+        console.print(
+            Text("Environment: inferred, not declared — installed ", style="bold yellow")
+            + Text(", ".join(inferred), style="yellow")
+            + Text(" (the paper's repo declares them nowhere)", style="dim"),
+        )
+        console.print()
+
     if report.run.get("note"):
         console.print(Text(f"Provenance: {report.run['note']}", style="dim"))
         console.print()
@@ -167,6 +176,15 @@ def render_markdown(report: DiffReport) -> str:
     # whether a run happened cannot read the green cells correctly.
     if report.run.get("note"):
         lines.append(f"**Provenance:** {report.run['note']}")
+    inferred = (report.run.get("environment") or {}).get("inferred") or []
+    if inferred:
+        # The run used an environment the paper never specified. That belongs
+        # beside the numbers, not buried in the JSON.
+        lines.append(
+            f"**Environment:** inferred, not declared — installed "
+            f"`{'`, `'.join(inferred)}` because the repo declares "
+            f"{'them' if len(inferred) > 1 else 'it'} nowhere"
+        )
     if lines[-1] != "":
         lines.append("")
 
