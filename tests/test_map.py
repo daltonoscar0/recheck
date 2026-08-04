@@ -187,30 +187,46 @@ class TestDeterministicMapper:
 
 
 class TestPlanCache:
+    def _paper(self):
+        return extract_tables(SCORES_PAPER_TEX)
+
     def _plan(self, tmp_path):
         root = write_files(tmp_path / "repo", {"results/scores_tiny.csv": SCORES_CSV})
-        return DeterministicMapper().map_paper(
-            extract_tables(SCORES_PAPER_TEX), build_inventory(root), "abc1234"
-        )
+        return DeterministicMapper().map_paper(self._paper(), build_inventory(root), "abc1234")
+
+    def _key(self):
+        return plan_cache.paper_key(self._paper())
 
     def test_round_trips(self, tmp_path) -> None:
         plan = self._plan(tmp_path)
-        plan_cache.store(tmp_path / "cache", plan)
-        loaded = plan_cache.load(tmp_path / "cache", "abc1234", "deterministic")
+        plan_cache.store(tmp_path / "cache", plan, self._key())
+        loaded = plan_cache.load(tmp_path / "cache", "abc1234", "deterministic", self._key())
         assert loaded is not None
         assert loaded.to_dict() == plan.to_dict()
 
     def test_a_different_commit_is_a_miss(self, tmp_path) -> None:
-        plan_cache.store(tmp_path / "cache", self._plan(tmp_path))
-        assert plan_cache.load(tmp_path / "cache", "def5678", "deterministic") is None
+        plan_cache.store(tmp_path / "cache", self._plan(tmp_path), self._key())
+        assert (
+            plan_cache.load(tmp_path / "cache", "def5678", "deterministic", self._key()) is None
+        )
+
+    def test_a_different_paper_is_a_miss(self, tmp_path) -> None:
+        # The plan maps *this* paper's cells. Keyed on the repo alone, a second
+        # paper against the same repo silently loaded the first paper's plan.
+        plan_cache.store(tmp_path / "cache", self._plan(tmp_path), self._key())
+        other = plan_cache.paper_key(extract_tables(SCORES_PAPER_TEX.replace("tiny", "huge")))
+        assert other != self._key()
+        assert plan_cache.load(tmp_path / "cache", "abc1234", "deterministic", other) is None
 
     def test_a_corrupt_entry_is_a_miss_not_a_crash(self, tmp_path) -> None:
-        path = plan_cache.store(tmp_path / "cache", self._plan(tmp_path))
+        path = plan_cache.store(tmp_path / "cache", self._plan(tmp_path), self._key())
         path.write_text("{not json")
-        assert plan_cache.load(tmp_path / "cache", "abc1234", "deterministic") is None
+        assert (
+            plan_cache.load(tmp_path / "cache", "abc1234", "deterministic", self._key()) is None
+        )
 
     def test_the_cached_plan_is_readable(self, tmp_path) -> None:
-        path = plan_cache.store(tmp_path / "cache", self._plan(tmp_path))
+        path = plan_cache.store(tmp_path / "cache", self._plan(tmp_path), self._key())
         text = path.read_text()
         assert "results/scores_tiny.csv" in text
         assert "value_column" in text
@@ -257,3 +273,42 @@ class TestQualifiedValueMatching:
 
     def test_an_unmatched_name_yields_nothing(self) -> None:
         assert self._artifact().candidates_for("lg", {"model": "vanilla"}) == []
+
+
+class TestAmbiguityIsRefusedNotSorted:
+    """Two files aligning equally well is an ambiguity, not a coin flip."""
+
+    def test_an_equal_scoring_pair_is_refused(self, tmp_path) -> None:
+        # Two identically-shaped files that both answer the cell. Sorting by
+        # path and taking the first reported one file's number as the paper's.
+        rows = "model,score\ntiny,0.85\n"
+        root = write_files(
+            tmp_path / "repo",
+            {"results/a_scores.csv": rows, "results/b_scores.csv": rows},
+        )
+        plan = DeterministicMapper().map_paper(
+            extract_tables(SCORES_PAPER_TEX), build_inventory(root), "c0ffee"
+        )
+        cells = [c for table in plan.tables for c in table.cells]
+        assert cells
+        for cell in cells:
+            if cell.failure is not None:
+                assert "equally well" in cell.failure.evidence or cell.recipe is None
+
+
+class TestFilenameMatchingIsTokenised:
+    def test_a_substring_is_not_a_filename_match(self) -> None:
+        from recheck.map.inventory import TabularArtifact
+
+        artifact = TabularArtifact(
+            path="results/ambiguous_and_control.csv", columns=["x"], n_rows=1
+        )
+        # "lg" is inside "logistic"; plain containment matched far too much.
+        assert not artifact.filename_matches("lg")
+
+    def test_a_whole_token_still_matches(self) -> None:
+        from recheck.map.inventory import TabularArtifact
+
+        artifact = TabularArtifact(path="results/surprisal_gpt2-large.csv",
+                                   columns=["x"], n_rows=1)
+        assert artifact.filename_matches("gpt2")

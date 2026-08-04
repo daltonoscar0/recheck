@@ -105,7 +105,15 @@ def _requirements_names(text: str) -> set[str]:
     names: set[str] = set()
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith(("#", "-")):
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("-"):
+            # `-e git+...#egg=name` and `-r nested.txt` both declare
+            # dependencies. Skipping every option line dropped them, so a repo
+            # that pins a package this way was reported as not providing it.
+            egg = re.search(r"#egg=([A-Za-z0-9._-]+)", stripped)
+            if egg:
+                names.add(normalize_distribution(egg.group(1)))
             continue
         match = _REQUIREMENT_NAME.match(stripped)
         if match:
@@ -234,10 +242,25 @@ def build(
         )
 
     if not have("uv"):
+        # Reporting success here handed back the operator's own interpreter, so
+        # the target repo's code ran inside recheck's venv with none of the
+        # repo's pins — and the report called it an environment.
         return (
-            Environment(source=source, python=python, note="uv is not installed; used the "
-                        "sandbox interpreter without installing the repo's pins"),
-            None,
+            Environment(
+                source=source,
+                python=python,
+                note=(
+                    f"uv is not installed, so the environment declared by "
+                    f"{source.path or 'this repo'} could not be built"
+                ),
+            ),
+            CommandResult(
+                argv=["uv"],
+                returncode=127,
+                stdout="",
+                stderr="uv is not installed; recheck builds environments with uv",
+                seconds=0.0,
+            ),
         )
 
     inferred_note = (

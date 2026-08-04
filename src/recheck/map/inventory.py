@@ -15,8 +15,6 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .tokens import contained
-
 SCRIPT_SUFFIXES = frozenset({".py", ".sh", ".r"})
 ARTIFACT_SUFFIXES = frozenset({".csv", ".tsv"})
 README_NAMES = ("readme.md", "readme.rst", "readme.txt", "readme")
@@ -122,7 +120,23 @@ class TabularArtifact:
         return None
 
     def filename_matches(self, name: str) -> bool:
-        return contained(name, self.path)
+        """Does the path name this thing, as a whole token?
+
+        Plain substring containment matched far too much: normalised, "Ambiguous"
+        is inside "ambiguous_and_control", and worse, a two-letter name like "lg"
+        is inside "logistic". A filename claim has to survive tokenisation.
+        """
+        from .tokens import content_tokens, normalize
+
+        wanted = normalize(name)
+        if not wanted:
+            return False
+        parts = content_tokens(self.path)
+        if wanted in {normalize(part) for part in parts}:
+            return True
+        # Also accept a name spelled across adjacent path tokens (bllip-xs).
+        joined = "".join(sorted(parts))  # order-insensitive guard, cheap
+        return wanted in joined and len(wanted) >= 4
 
 
 @dataclass
@@ -175,7 +189,14 @@ def sniff_artifact(path: Path, root: Path) -> TabularArtifact | None:
             for row in reader:
                 n_rows += 1
                 cells = {c: (row.get(c) or "").strip() for c in columns}
-                key = tuple(sorted(cells.items()))
+                # Keyed on the categorical combination only. Including the
+                # measurement columns made every row distinct, so the cap was
+                # reached on the raw row count and the tail of a long file was
+                # never observed — which is exactly the co-occurrence evidence
+                # the mapper uses to resolve a name against qualified values.
+                key = tuple(
+                    sorted((c, v) for c, v in cells.items() if not _looks_numeric(v) or not v)
+                )
                 if key not in observed_seen and len(observed_seen) <= MAX_OBSERVED_ROWS:
                     observed_seen.add(key)
                     observed.append(cells)

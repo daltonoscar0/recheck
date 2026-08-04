@@ -56,3 +56,22 @@ class TestAliasTable:
 
     def test_empty_table_is_falsy(self) -> None:
         assert not AliasTable([])
+
+
+class TestALonePairIsNotAMappingTable:
+    def test_a_single_pair_is_not_harvested(self) -> None:
+        # One `"a": "b"` mentioning a data value is more likely a title or a
+        # path than a rendering table, and a bad alias bridges two different
+        # things silently.
+        script = ScriptFile(path="plot.py", text='TITLE = {"vanilla": "Our Model"}\n')
+        assert harvest([script], {"vanilla"}) == []
+
+    def test_a_real_mapping_table_survives(self) -> None:
+        script = ScriptFile(
+            path="plot.py",
+            text='NAMES = {\n  "vanilla": "LSTM",\n  "ordered-neurons": "ON-LSTM",\n}\n',
+        )
+        assert {a.right for a in harvest([script], {"vanilla", "ordered-neurons"})} == {
+            "LSTM",
+            "ON-LSTM",
+        }

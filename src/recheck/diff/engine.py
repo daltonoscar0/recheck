@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -152,6 +153,20 @@ def _compare_values(cell: Cell, result: ResultCell, tolerance: Tolerance) -> Cel
     paper_value = cell.value
     result_value = result.value
     assert paper_value is not None and result_value is not None
+
+    # NaN loses every comparison, so a non-finite value would slide past the
+    # band checks and the sign check alike and be graded by whichever branch
+    # happened to be last. It is not a number and cannot be compared.
+    if not (math.isfinite(paper_value) and math.isfinite(result_value)):
+        which = "the paper's" if not math.isfinite(paper_value) else "the rerun's"
+        return CellComparison(
+            address=cell.address,
+            status=Status.RED,
+            paper_value=paper_value if math.isfinite(paper_value) else None,
+            result_value=result_value if math.isfinite(result_value) else None,
+            paper_text=cell.text,
+            notes=[f"{which} value is not finite, so the two cannot be compared"],
+        )
 
     delta = result_value - paper_value
     band = tolerance.band(paper_value)

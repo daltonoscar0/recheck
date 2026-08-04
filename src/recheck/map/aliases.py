@@ -32,6 +32,10 @@ from .tokens import normalize
 # `"key": "value"` inside a dict literal. Deliberately line-scoped: a mapping
 # worth harvesting is written one pair per line in every repo we have seen, and
 # matching across lines would sweep up unrelated adjacent strings.
+#: Lines within this window count as the same dict literal for the purpose of
+#: deciding whether a pair has company.
+_GROUP_LINES = 8
+
 _PAIR = re.compile(r"""["']([^"'\n]{1,60})["']\s*:\s*["']([^"'\n]{1,60})["']""")
 
 # A display name is short and human-facing; these are never one.
@@ -94,7 +98,26 @@ def harvest(scripts: list[ScriptFile], known_values: set[str]) -> list[Alias]:
                 key = (normalize(left), normalize(right))
                 found.setdefault(key, Alias(left=left, right=right, path=script.path, line=number))
 
-    return sorted(found.values(), key=lambda a: (a.path, a.line))
+    # A rendering table has several entries; a lone `"a": "b"` that happens to
+    # mention a data value is far more likely to be a path, a colour, a title or
+    # a one-off setting. Requiring company is what separates the two, and a bad
+    # alias silently bridges two names that mean different things.
+    grouped: dict[tuple[str, int], list[Alias]] = {}
+    for alias in found.values():
+        grouped.setdefault((alias.path, alias.line // _GROUP_LINES), []).append(alias)
+    neighbours: dict[tuple[str, int], int] = {}
+    for (path, block), aliases in grouped.items():
+        for offset in (-1, 0, 1):
+            neighbours[(path, block + offset)] = neighbours.get((path, block + offset), 0) + len(
+                aliases
+            )
+
+    kept = [
+        alias
+        for alias in found.values()
+        if neighbours.get((alias.path, alias.line // _GROUP_LINES), 0) >= 2
+    ]
+    return sorted(kept, key=lambda a: (a.path, a.line))
 
 
 class AliasTable:

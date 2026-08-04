@@ -150,7 +150,7 @@ def execute(
         cells.extend(_harvest_table(table_plan, repo, outcome, options, provenances))
 
     if options.plan_cache_dir is not None:
-        plan_path = plan_cache.store(options.plan_cache_dir, plan)
+        plan_path = plan_cache.store(options.plan_cache_dir, plan, plan_cache.paper_key(paper))
 
     results = Results(
         cells=cells,
@@ -177,11 +177,18 @@ def _load_plan(
 ) -> tuple[RepoPlan, Path | None]:
     directory = options.plan_cache_dir
     if directory is not None and not options.refresh_plan:
-        cached = plan_cache.load(directory, repo.commit, options.mapper.name)
+        key = plan_cache.paper_key(paper)
+        cached = plan_cache.load(directory, repo.commit, options.mapper.name, key)
         if cached is not None:
-            return cached, plan_cache.cache_path(directory, repo.commit, options.mapper.name)
+            return cached, plan_cache.cache_path(
+                directory, repo.commit, options.mapper.name, key
+            )
     plan = options.mapper.map_paper(paper, inventory, repo.commit)
-    path = plan_cache.store(directory, plan) if directory is not None else None
+    path = (
+        plan_cache.store(directory, plan, plan_cache.paper_key(paper))
+        if directory is not None
+        else None
+    )
     return plan, path
 
 
@@ -296,6 +303,13 @@ def _run_table(
     # 3. Build the environment only for a run that is going to happen. It is
     #    built once per run and reused, so a table reached later may need a
     #    package an earlier one did not — top up rather than run without it.
+    # A build that fails must not become the run's environment. It used to be
+    # returned alongside the ENV_UNRESOLVABLE blocker and rebound by the caller,
+    # so every later table skipped the build, ran against an empty venv, died
+    # with ModuleNotFoundError, and was reported as MISSING_DEPENDENCY — a
+    # specific, evidenced, false accusation against the paper's repo for a
+    # failure that was ours.
+    entering_environment = environment
     failed_install: CommandResult | None = None
     installed_mb_before = env_module.directory_mb(
         environment.venv if environment is not None else None
@@ -327,7 +341,7 @@ def _run_table(
                 env_module.resolver_evidence(requirements, failed_install),
             )
         )
-        return outcome, environment
+        return outcome, entering_environment
 
     # 4. Run it, killed at the deadline.
     argv = [environment.python, *entry.argv[1:]] if entry.argv[0] == "python" else list(entry.argv)

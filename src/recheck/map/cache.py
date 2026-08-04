@@ -11,10 +11,12 @@ all match. Anything else is a miss, because a stale plan is worse than no plan.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
 
+from ..schema import Paper
 from .plan import PLAN_VERSION, RepoPlan
 
 
@@ -23,12 +25,28 @@ def default_cache_dir() -> Path:
     return Path(root) / "recheck" / "plans"
 
 
-def cache_path(directory: Path, commit: str, mapper: str) -> Path:
-    return directory / f"{commit}.{mapper}.json"
+def paper_key(paper: Paper) -> str:
+    """A short fingerprint of what the plan was computed for.
+
+    A plan maps *this paper's* cells onto a repo. Keyed on the repo alone, a
+    second paper run against the same repo silently loaded the first paper's
+    plan. `commit` is also "unknown" for any non-git directory, so two unrelated
+    folders collided on the same key.
+    """
+    digest = hashlib.sha256()
+    for table in paper.tables:
+        digest.update(table.id.encode())
+        for cell in table.cells:
+            digest.update(cell.address.encode())
+    return digest.hexdigest()[:12]
 
 
-def load(directory: Path, commit: str, mapper: str) -> RepoPlan | None:
-    path = cache_path(directory, commit, mapper)
+def cache_path(directory: Path, commit: str, mapper: str, paper: str) -> Path:
+    return directory / f"{commit}.{mapper}.{paper}.json"
+
+
+def load(directory: Path, commit: str, mapper: str, paper: str) -> RepoPlan | None:
+    path = cache_path(directory, commit, mapper, paper)
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
@@ -37,14 +55,18 @@ def load(directory: Path, commit: str, mapper: str) -> RepoPlan | None:
         return None
     if data.get("commit") != commit or data.get("mapper") != mapper:
         return None
+    if data.get("paper_key") != paper:
+        return None
     try:
         return RepoPlan.from_dict(data)
     except (KeyError, ValueError):
         return None
 
 
-def store(directory: Path, plan: RepoPlan) -> Path:
+def store(directory: Path, plan: RepoPlan, paper: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    path = cache_path(directory, plan.commit, plan.mapper)
-    path.write_text(json.dumps(plan.to_dict(), indent=2, ensure_ascii=False) + "\n")
+    path = cache_path(directory, plan.commit, plan.mapper, paper)
+    payload = plan.to_dict()
+    payload["paper_key"] = paper
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     return path

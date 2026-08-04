@@ -10,6 +10,7 @@ the recipe that produced it, because "the number is wrong" is unactionable and
 from __future__ import annotations
 
 import csv
+import math
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,9 +82,17 @@ def aggregate(root: Path, recipe: AggregateRecipe) -> Harvested:
                     continue
                 raw = (row.get(recipe.value_column) or "").strip()
                 try:
-                    values.append(float(raw))
+                    parsed = float(raw)
                 except ValueError:
                     skipped += 1
+                    continue
+                # float() happily accepts 'nan' and 'inf'. One NaN row poisons a
+                # mean and a stdev into NaN, which then reaches the report as a
+                # number. A value that is not finite is not a measurement.
+                if not math.isfinite(parsed):
+                    skipped += 1
+                    continue
+                values.append(parsed)
     except (OSError, csv.Error) as exc:
         raise HarvestError(f"could not read {recipe.artifact}: {exc}") from exc
 

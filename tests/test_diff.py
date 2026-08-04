@@ -254,3 +254,20 @@ class TestInferredEnvironmentIsSurfaced:
         report = compare(make_paper(1.0), make_results(value=1.0))
         report.run = {"environment": {"inferred": []}}
         assert "inferred" not in render_markdown(report)
+
+
+class TestNonFiniteValues:
+    """NaN loses every comparison, so it must never be graded by fallthrough."""
+
+    def test_a_nan_result_is_red_not_silently_graded(self) -> None:
+        assert status_of(make_paper(1.0), make_results(value=float("nan"))) is Status.RED
+
+    def test_the_reason_says_it_cannot_be_compared(self) -> None:
+        report = compare(make_paper(1.0), make_results(value=float("nan")))
+        assert "not finite" in " ".join(report.comparisons[0].notes)
+
+    def test_infinity_is_handled_too(self) -> None:
+        assert status_of(make_paper(1.0), make_results(value=float("inf"))) is Status.RED
+
+    def test_a_non_finite_paper_value_is_caught(self) -> None:
+        assert status_of(make_paper(float("nan")), make_results(value=1.0)) is Status.RED

@@ -306,6 +306,21 @@ def _score_artifact(
     return score, filters
 
 
+#: Columns that vary a measurement without changing what is measured. Averaging
+#: over these is what a paper does too; averaging over anything else is not.
+_REPLICATE_COLUMNS = frozenset(
+    {"seed", "seeds", "run", "runs", "trial", "trials", "fold", "folds",
+     "replicate", "replicates", "item", "items", "subject", "subjects", "pid",
+     "sample", "index", "iteration", "epoch"}
+)
+
+
+def _is_replicate_column(column: str) -> bool:
+    from .tokens import content_tokens
+
+    return bool(content_tokens(column) & _REPLICATE_COLUMNS)
+
+
 def _pick_value_column(
     artifact: TabularArtifact, wanted: set[str], exclude: set[str]
 ) -> tuple[str | None, list[str]]:
@@ -361,18 +376,42 @@ def _recipe_for(
 
     scored.sort(key=lambda item: (-item[0], item[1].path))
 
+    # Two files aligning equally well is an ambiguity, not a coin flip. Sorting
+    # by path and taking the first silently picked whichever was alphabetically
+    # earlier and reported its number as the paper's — the worst outcome this
+    # tool can produce. Only refuse when the tie is between files that could
+    # each actually answer, which the fall-through below establishes.
+    tied_top = [item for item in scored if item[0] == scored[0][0]]
+
     # Try candidates best-first. A file can align to a cell's names and still be
     # unable to answer the question the table asks — a per-model results file
     # whose only numeric column is an item index, say. That is a reason to fall
     # through to the next candidate, not to give up on the cell.
     last_failure: PlanFailure | None = None
+    answered: list[tuple[str, AggregateRecipe]] = []
     for _, artifact, name_filters in scored:
         recipe, failure = _recipe_from_artifact(
             cell, artifact, name_filters, wanted, caption_phrases, claimed
         )
-        if recipe is not None:
+        if recipe is None:
+            last_failure = failure
+            continue
+        answered.append((artifact.path, recipe))
+        # Only a tie at the top score is ambiguous; a lower-scoring file losing
+        # to a better one is a decision the evidence supports.
+        if len(tied_top) < 2 or artifact.path not in {item[1].path for item in tied_top}:
             return recipe, None
-        last_failure = failure
+        if len(answered) > 1:
+            paths = ", ".join(sorted(path for path, _ in answered))
+            return None, PlanFailure(
+                code=FailureCode.SCRIPT_NOT_FOUND,
+                evidence=(
+                    f"{paths} align to this cell equally well and both can answer it; "
+                    f"the repo does not say which one the paper used"
+                ),
+            )
+    if answered:
+        return answered[0][1], None
     assert last_failure is not None
     return None, last_failure
 
@@ -398,6 +437,32 @@ def _recipe_from_artifact(
         if len(hits) == 1:
             filters.append(Filter(column=column, value=hits[0]))
             filter_columns.add(column)
+
+    # Name accounting was one-directional: every name in the address had to be
+    # matched, but a categorical column nothing selected was ignored and the
+    # aggregate ran over all of its values.
+    #
+    # Collapsing a factor the paper itself collapses is correct — the calibration
+    # table averages over stimulus distance, and so did the paper. What is not
+    # correct is mixing a dimension this table *does* distinguish elsewhere: if a
+    # sibling cell pins `condition` and this cell does not, averaging over
+    # condition reports a different quantity than the paper printed.
+    mixed = sorted(
+        column
+        for column in artifact.categories
+        if column in claimed
+        and column not in filter_columns
+        and len(artifact.categories[column]) > 1
+    )
+    if mixed:
+        return None, PlanFailure(
+            code=FailureCode.SCRIPT_NOT_FOUND,
+            evidence=(
+                f"{artifact.path} aligns to this cell, but other cells in this table select a "
+                f"{', '.join(mixed)} and this one names none, so any aggregate would mix "
+                f"{', '.join(sorted(artifact.categories[mixed[0]])[:4])}"
+            ),
+        )
 
     value_column, candidates = _pick_value_column(artifact, wanted, filter_columns)
     if value_column is None:

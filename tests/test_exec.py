@@ -386,3 +386,45 @@ class TestCondaNamesAreNotTreatedAsInstalled:
         # environment.yml lists numpy, but pip never installed it, so a run that
         # treated it as satisfied would die at runtime instead.
         assert "numpy" in missing
+
+
+class TestNonFiniteHarvesting:
+    def test_nan_rows_are_skipped_not_averaged(self, tmp_path) -> None:
+        from recheck.exec.harvest import aggregate
+        from recheck.map.plan import AggregateRecipe, Statistic
+
+        artifact = tmp_path / "scores.csv"
+        artifact.write_text("model,score\ntiny,1.0\ntiny,nan\ntiny,3.0\n")
+        recipe = AggregateRecipe(
+            artifact="scores.csv", value_column="score", statistic=Statistic.MEAN
+        )
+        result = aggregate(tmp_path, recipe)
+        # float() accepts 'nan'; one such row turns a mean into NaN, which then
+        # reaches the report looking like a measurement.
+        assert result.value == pytest.approx(2.0)
+
+    def test_infinities_are_skipped_too(self, tmp_path) -> None:
+        from recheck.exec.harvest import aggregate
+        from recheck.map.plan import AggregateRecipe, Statistic
+
+        artifact = tmp_path / "scores.csv"
+        artifact.write_text("model,score\ntiny,1.0\ntiny,inf\ntiny,3.0\n")
+        recipe = AggregateRecipe(
+            artifact="scores.csv", value_column="score", statistic=Statistic.MEAN
+        )
+        assert aggregate(tmp_path, recipe).value == pytest.approx(2.0)
+
+
+class TestRequirementsOptionLines:
+    def test_an_editable_egg_name_counts_as_declared(self) -> None:
+        from recheck.exec.env import _requirements_names
+
+        names = _requirements_names("-e git+https://x/y.git#egg=mypkg\nnumpy==1.0\n")
+        # Skipping every '-' line reported a pinned package as missing.
+        assert "mypkg" in names
+        assert "numpy" in names
+
+    def test_a_nested_include_does_not_crash(self) -> None:
+        from recheck.exec.env import _requirements_names
+
+        assert "numpy" in _requirements_names("-r base.txt\nnumpy\n")
