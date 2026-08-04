@@ -1,0 +1,256 @@
+"""Build the environment a repo's scripts need, or say precisely why not.
+
+Two failures in the taxonomy live here, and both are reported rather than
+worked around:
+
+- the resolver finds no satisfying set → `ENV_UNRESOLVABLE`, with the
+  resolver's own error as evidence
+- a script imports something the repo never pins → `MISSING_DEPENDENCY`, with
+  the module, the import line, and the file that should have pinned it
+
+The second is a static check, so it costs nothing and runs before any budget is
+committed. It catches the most common reproducibility failure in ML repos by a
+wide margin: a `requirements.txt` frozen from a working venv that silently
+omits the one package the author installed by hand.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ..map.analysis import import_line, imported_modules
+from ..map.inventory import RepoInventory, ScriptFile
+from .sandbox import CommandResult, Sandbox, have
+
+#: Import name -> the distribution that provides it, where they differ.
+IMPORT_ALIASES: dict[str, str] = {
+    "sklearn": "scikit-learn",
+    "cv2": "opencv-python",
+    "PIL": "pillow",
+    "yaml": "pyyaml",
+    "bs4": "beautifulsoup4",
+    "dateutil": "python-dateutil",
+    "attr": "attrs",
+    "OpenSSL": "pyopenssl",
+    "serial": "pyserial",
+    "Crypto": "pycryptodome",
+    "torch": "torch",
+    "hf_hub": "huggingface-hub",
+    "huggingface_hub": "huggingface-hub",
+}
+
+#: Modules that are always available and never belong in a requirements file.
+ALWAYS_AVAILABLE = frozenset({"__future__", "typing_extensions"})
+
+_REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+
+
+class EnvKind:
+    REQUIREMENTS = "requirements.txt"
+    PYPROJECT = "pyproject.toml"
+    CONDA = "environment.yml"
+    NONE = "none"
+
+
+@dataclass(frozen=True)
+class RequirementSource:
+    """Where a repo states its dependencies, and what it states."""
+
+    kind: str
+    path: str
+    distributions: frozenset[str] = frozenset()
+
+    def describe(self) -> str:
+        if self.kind == EnvKind.NONE:
+            return "no requirements.txt, pyproject.toml, or environment.yml"
+        return f"{self.path} ({len(self.distributions)} pinned distributions)"
+
+
+@dataclass
+class Environment:
+    """The environment a run will actually use."""
+
+    source: RequirementSource
+    python: str
+    installed: list[str] = field(default_factory=list)
+    venv: Path | None = None
+    note: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "requirements": self.source.path,
+            "requirements_kind": self.source.kind,
+            "python": self.python,
+            "installed": self.installed,
+            "note": self.note,
+        }
+
+
+def normalize_distribution(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _requirements_names(text: str) -> set[str]:
+    names: set[str] = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "-")):
+            continue
+        match = _REQUIREMENT_NAME.match(stripped)
+        if match:
+            names.add(normalize_distribution(match.group(1)))
+    return names
+
+
+def _pyproject_names(text: str) -> set[str]:
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return set()
+    project = data.get("project", {})
+    entries = list(project.get("dependencies", []) or [])
+    for extra in (project.get("optional-dependencies", {}) or {}).values():
+        entries.extend(extra)
+    names: set[str] = set()
+    for entry in entries:
+        match = _REQUIREMENT_NAME.match(str(entry))
+        if match:
+            names.add(normalize_distribution(match.group(1)))
+    return names
+
+
+def _conda_names(text: str) -> set[str]:
+    names: set[str] = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            continue
+        match = _REQUIREMENT_NAME.match(stripped[2:])
+        if match:
+            names.add(normalize_distribution(match.group(1)))
+    return names
+
+
+def resolve_requirements(root: Path) -> RequirementSource:
+    """Find the repo's dependency declaration, in the documented order."""
+    for filename, kind, parse in (
+        ("requirements.txt", EnvKind.REQUIREMENTS, _requirements_names),
+        ("pyproject.toml", EnvKind.PYPROJECT, _pyproject_names),
+        ("environment.yml", EnvKind.CONDA, _conda_names),
+        ("environment.yaml", EnvKind.CONDA, _conda_names),
+    ):
+        path = root / filename
+        if path.is_file():
+            return RequirementSource(
+                kind=kind, path=filename, distributions=frozenset(parse(path.read_text()))
+            )
+    return RequirementSource(kind=EnvKind.NONE, path="")
+
+
+def unpinned_imports(
+    script: ScriptFile, source: RequirementSource, inventory: RepoInventory
+) -> list[tuple[str, int]]:
+    """Third-party modules the script imports that the repo never pins.
+
+    Local modules — a sibling `.py` in the repo — are not dependencies, and
+    neither is anything in the standard library.
+    """
+    local = {Path(other.path).stem for other in inventory.scripts}
+    local |= {Path(other.path).parts[0] for other in inventory.scripts if "/" in other.path}
+    missing: list[tuple[str, int]] = []
+    for module, line in imported_modules(script).items():
+        if module in sys.stdlib_module_names or module in ALWAYS_AVAILABLE or module in local:
+            continue
+        distribution = normalize_distribution(IMPORT_ALIASES.get(module, module))
+        if distribution in source.distributions:
+            continue
+        missing.append((module, line))
+    return missing
+
+
+def missing_dependency_evidence(
+    script: ScriptFile, source: RequirementSource, missing: list[tuple[str, int]]
+) -> str:
+    module, line = missing[0]
+    where = import_line(script, line)
+    others = (
+        f" (also {', '.join(m for m, _ in missing[1:])})" if len(missing) > 1 else ""
+    )
+    stated = source.describe()
+    return (
+        f"{script.path}:{line} runs `{where}`, but {module!r} is not provided by {stated}{others}"
+    )
+
+
+def build(
+    sandbox: Sandbox, source: RequirementSource, *, timeout: float
+) -> tuple[Environment, CommandResult | None]:
+    """Create the run environment. Returns it, plus the failing install if any.
+
+    With no requirements file there is nothing to resolve, so the sandbox's
+    interpreter is used directly and the report says so rather than implying an
+    environment was reconstructed.
+    """
+    python = sys.executable
+    if source.kind == EnvKind.NONE:
+        return (
+            Environment(
+                source=source,
+                python=python,
+                note="repo declares no dependencies; ran against the sandbox interpreter",
+            ),
+            None,
+        )
+
+    if not have("uv"):
+        return (
+            Environment(source=source, python=python, note="uv is not installed; used the "
+                        "sandbox interpreter without installing the repo's pins"),
+            None,
+        )
+
+    venv = sandbox.root / "venv"
+    created = sandbox.run(["uv", "venv", "--python", python, str(venv)], timeout=timeout)
+    if not created.ok:
+        return (
+            Environment(source=source, python=python,
+                        note=f"uv venv failed: {created.tail(3)}"),
+            created,
+        )
+
+    interpreter = venv / "bin" / "python"
+    if source.kind != EnvKind.REQUIREMENTS:
+        install = sandbox.run(
+            ["uv", "pip", "install", "--python", str(interpreter), "."],
+            timeout=timeout,
+        )
+    else:
+        install = sandbox.run(
+            ["uv", "pip", "install", "--python", str(interpreter), "-r", source.path],
+            timeout=timeout,
+        )
+    if not install.ok:
+        return Environment(source=source, python=str(interpreter), venv=venv), install
+
+    frozen = sandbox.run(
+        ["uv", "pip", "freeze", "--python", str(interpreter)], timeout=timeout
+    )
+    return (
+        Environment(
+            source=source,
+            python=str(interpreter),
+            venv=venv,
+            installed=sorted(frozen.stdout.split()) if frozen.ok else [],
+            note=f"installed from {source.path} with uv",
+        ),
+        None,
+    )
+
+
+def resolver_evidence(source: RequirementSource, result: CommandResult) -> str:
+    """Evidence for `ENV_UNRESOLVABLE`: the resolver's own words."""
+    return f"installing {source.path} failed: {result.tail(6) or 'no output from the resolver'}"

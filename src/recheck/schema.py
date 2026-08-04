@@ -181,6 +181,10 @@ class ResultCell:
     n_seeds: int | None = None
     failure_code: str | None = None
     evidence: str | None = None
+    caveats: list[str] = field(default_factory=list)
+    """Things true about a number that was still produced — an unseeded script,
+    a value derived from two others. A caveat never replaces a value; it rides
+    alongside it into the report so the reader sees both."""
 
     @property
     def is_failure(self) -> bool:
@@ -196,6 +200,8 @@ class ResultCell:
                 out["uncertainty"] = self.uncertainty
             if self.n_seeds is not None:
                 out["n_seeds"] = self.n_seeds
+        if self.caveats:
+            out["caveats"] = self.caveats
         return out
 
     @classmethod
@@ -208,6 +214,7 @@ class ResultCell:
             n_seeds=d.get("n_seeds"),
             failure_code=failure.get("code"),
             evidence=failure.get("evidence"),
+            caveats=list(d.get("caveats", [])),
         )
 
 

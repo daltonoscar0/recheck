@@ -167,6 +167,10 @@ def _compare_values(cell: Cell, result: ResultCell, tolerance: Tolerance) -> Cel
     else:
         status = Status.RED
 
+    # A caveat the executor attached — an unseeded script, a derived column —
+    # travels with the number rather than replacing it.
+    notes.extend(result.caveats)
+
     return CellComparison(
         address=cell.address,
         status=status,
