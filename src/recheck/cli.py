@@ -12,12 +12,13 @@ from rich.console import Console
 
 from . import __version__
 from .diff import (
+    ConfigError,
     Status,
-    TolerancePolicy,
     compare,
     parse_tolerance,
     render_markdown,
     render_terminal,
+    resolve_policy,
 )
 from .paper import FetchError, extract_tables, fetch, find_main_tex, load_local, resolve_inputs
 from .schema import Paper, Results, SchemaError
@@ -48,6 +49,13 @@ ToleranceOption = Annotated[
     typer.Option(
         "--tolerance",
         help="Comparison band: a bare number is relative, or 'rel=0.05,abs=0.1'.",
+    ),
+]
+ToleranceConfigOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--tolerance-config",
+        help="TOML file with per-table tolerance bands. Defaults to the nearest recheck.toml.",
     ),
 ]
 
@@ -130,6 +138,7 @@ def diff_command(
     paper_json: Annotated[Path, typer.Argument(help="paper.json from `recheck extract`.")],
     results_json: Annotated[Path, typer.Argument(help="results.json of freshly-run numbers.")],
     tolerance: ToleranceOption = None,
+    tolerance_config: ToleranceConfigOption = None,
     out: OutOption = None,
     markdown: Annotated[
         bool, typer.Option("--markdown/--terminal", help="Render markdown instead of a table.")
@@ -139,10 +148,20 @@ def diff_command(
     try:
         paper = Paper.read(paper_json)
         results = Results.read(results_json)
-        policy = TolerancePolicy(default=parse_tolerance(tolerance))
-    except (SchemaError, ValueError) as exc:
+        policy, config_used = resolve_policy(
+            tolerance_config,
+            parse_tolerance(tolerance) if tolerance else None,
+            search_from=paper_json,
+        )
+    except (SchemaError, ConfigError, ValueError) as exc:
         err_console.print(f"[red]error:[/red] {exc}")
         raise typer.Exit(code=2) from exc
+
+    if config_used is not None and policy.per_table:
+        console.print(
+            f"[dim]Using per-table tolerances from {config_used} "
+            f"({len(policy.per_table)} table{'s' if len(policy.per_table) > 1 else ''})[/dim]"
+        )
 
     report = compare(paper, results, policy)
 
@@ -167,6 +186,7 @@ def run(
     max_hours: MaxHoursOption = 2.0,
     max_gpu: MaxGpuOption = 1.0,
     tolerance: ToleranceOption = None,
+    tolerance_config: ToleranceConfigOption = None,
     out: OutOption = None,
 ) -> None:
     """Run the full pipeline: extract, reproduce, and diff.
@@ -187,6 +207,7 @@ def run(
         f"--max-hours {max_hours}, --max-gpu {max_gpu}"
         + (f", --repo {repo}" if repo else "")
         + (f", --tolerance {tolerance}" if tolerance else "")
+        + (f", --tolerance-config {tolerance_config}" if tolerance_config else "")
     )
     console.print(
         "Run [bold]recheck extract[/bold] to save paper.json, then "

@@ -1,0 +1,35 @@
+# Tolerance configuration. Copy to `recheck.toml` next to your paper.json and
+# `recheck diff` will pick it up automatically, or pass it with
+# `--tolerance-config path/to/file.toml`.
+#
+# Precedence, strongest first:
+#   1. --tolerance on the command line   (sets the default band only)
+#   2. [tolerance] below                 (sets the default band)
+#   3. built-in defaults                 (relative 0.05, absolute by magnitude)
+#
+# Per-table entries always apply to their own table: an explicit per-table band
+# is a more specific statement than a global flag, so --tolerance does not
+# erase it.
+
+[tolerance]
+relative = 0.05          # fraction of the paper's value
+absolute = 0.1           # floor, so near-zero values stay comparable
+yellow_multiplier = 3.0  # YELLOW reaches this many bands out; beyond is RED
+
+# Tables are keyed by the id `recheck extract` assigns: the LaTeX \label when
+# there is one, otherwise "table-N" by order of appearance.
+
+# Surprisal deltas are small; a 5% relative band would wave through real drift.
+[tolerance.tables."tab:npz"]
+relative = 0.005
+absolute = 0.02
+
+# Perplexities in the hundreds: an absolute floor of 0.1 would flag pure noise.
+# Unset fields inherit from [tolerance] above, so this keeps relative = 0.05.
+[tolerance.tables."tab:perplexity"]
+absolute = 2.0
+
+# A table of wall-clock timings reproduces loosely by nature.
+[tolerance.tables."table-4"]
+relative = 0.25
+yellow_multiplier = 2.0

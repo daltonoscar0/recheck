@@ -175,8 +175,26 @@ For a paper value `p`, the band is `max(absolute, |p| × relative)`, where
 | ≥ 100 | 1.0 |
 
 `--tolerance` takes a bare number (relative) or `rel=…,abs=…,yellow=…`.
-Per-table overrides are available through `TolerancePolicy.per_table`, keyed by
-table `id`.
+
+Per-table bands come from a TOML config — `--tolerance-config path.toml`, or
+the nearest `recheck.toml` found by walking up from the paper.json:
+
+```toml
+[tolerance]
+relative = 0.05
+absolute = 0.1
+yellow_multiplier = 3.0
+
+[tolerance.tables."tab:npz"]     # keyed by the table's id: \label, or table-N
+relative = 0.005                 # unset fields inherit from [tolerance]
+```
+
+Precedence, strongest first: `--tolerance` on the command line, then
+`[tolerance]` in the config, then the built-in defaults. Per-table entries
+always apply to their own table — an explicit per-table band is more specific
+than a global flag, so `--tolerance` does not erase it.
+
+See `recheck.toml.example` for a fully commented file.
 
 When the paper reports an uncertainty, a result within ±1 of it is `GREEN`
 regardless of the configured band — the paper's own error bar outranks our

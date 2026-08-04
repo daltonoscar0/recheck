@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install project
+        run: uv sync --extra dev --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Test
+        # Network tests are excluded: CI must not depend on arXiv being up.
+        run: uv run pytest -m "not network" -q
+
+      - name: Verify golden files are current
+        # Extraction is deterministic, so regenerating must be a no-op. A diff
+        # here means someone changed extraction without reviewing its effect.
+        run: |
+          uv run python scripts/update_golden.py
+          git diff --exit-code --stat tests/golden/ || {
+            echo "::error::Golden files are stale. Run scripts/update_golden.py and commit the diff."
+            exit 1
+          }
+
+      - name: Smoke-test the CLI
+        run: |
+          uv run recheck --help
+          uv run recheck extract tests/fixtures/demo_report.tex --out /tmp/paper.json
+          uv run recheck diff /tmp/paper.json tests/fixtures/results/demo_results.json \
+            --out /tmp/report.md || [ $? -eq 1 ]  # exit 1 is expected: the fixture has RED cells
+          grep -q "Reproduction report" /tmp/report.md

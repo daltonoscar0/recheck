@@ -2,6 +2,9 @@
 
 **Cell-by-cell reproduction reports for ML/NLP papers.**
 
+[![CI](https://github.com/daltonoscar0/recheck/actions/workflows/ci.yml/badge.svg)](https://github.com/daltonoscar0/recheck/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Point Recheck at a paper and its code. It pulls the tables out of the paper's
 LaTeX source, reruns what the repo can actually run, and puts the two side by
 side — green, yellow, red — with a specific, evidenced reason for every cell
@@ -121,6 +124,21 @@ with magnitude so a surprisal delta near 1 and a perplexity in the hundreds are
 both judged sensibly. Override with `--tolerance 0.02` or
 `--tolerance rel=0.01,abs=0.5`.
 
+Different tables in one paper rarely deserve the same sensitivity, so bands can
+be set per table in a `recheck.toml` — picked up automatically from beside your
+paper.json, or passed with `--tolerance-config`:
+
+```toml
+[tolerance]
+relative = 0.05
+
+[tolerance.tables."tab:npz"]   # keyed by \label, or table-N when unlabelled
+relative = 0.005               # unset fields inherit from [tolerance]
+```
+
+Copy `recheck.toml.example` to start. `--tolerance` overrides the config's
+default band but never its per-table entries.
+
 Full rules, the JSON contracts, and every failure code: [docs/SCHEMA.md](docs/SCHEMA.md).
 Why it works this way: [docs/DECISIONS.md](docs/DECISIONS.md).
 
@@ -162,7 +180,7 @@ which is what a results file joins against, and what you read in the report.
 ## Development
 
 ```bash
-uv run pytest                    # 179 tests
+uv run pytest                    # 203 tests
 uv run pytest -m network         # also hit arXiv for real
 uv run ruff check .
 python scripts/update_golden.py  # only when an extraction change is intended
@@ -170,6 +188,10 @@ python scripts/update_golden.py  # only when an extraction change is intended
 
 Golden files are committed. Tests never self-heal — regenerating is a
 deliberate act, and the resulting diff is the thing you review.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## Roadmap
 

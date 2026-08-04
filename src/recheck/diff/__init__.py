@@ -1,5 +1,6 @@
 """Diff side: compare paper cells to fresh results and render the report."""
 
+from .config import ConfigError, discover_config, load_tolerance_config, resolve_policy
 from .engine import (
     CellComparison,
     DiffReport,
@@ -20,6 +21,10 @@ __all__ = [
     "TolerancePolicy",
     "compare",
     "parse_tolerance",
+    "ConfigError",
+    "discover_config",
+    "load_tolerance_config",
+    "resolve_policy",
     "render_markdown",
     "render_terminal",
     "FailureCode",

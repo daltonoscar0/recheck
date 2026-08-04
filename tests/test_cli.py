@@ -104,3 +104,64 @@ class TestRun:
         result = runner.invoke(app, ["run", str(fixtures_dir / "clean_booktabs.tex")])
         assert result.exit_code == 3
         assert "milestone 2" in result.stdout
+
+
+class TestPerTableTolerance:
+    def _paper(self, tmp_path, fixtures_dir):
+        out = tmp_path / "paper.json"
+        runner.invoke(
+            app, ["extract", str(fixtures_dir / "demo_report.tex"), "--out", str(out)]
+        )
+        return out
+
+    def test_config_flag_is_applied(self, tmp_path, fixtures_dir, results_dir) -> None:
+        config = tmp_path / "strict.toml"
+        config.write_text(
+            '[tolerance]\nrelative = 0.05\n\n[tolerance.tables."tab:scales"]\n'
+            "relative = 0.0001\nabsolute = 0.0001\n"
+        )
+        result = runner.invoke(
+            app,
+            [
+                "diff",
+                str(self._paper(tmp_path, fixtures_dir)),
+                str(results_dir / "demo_results.json"),
+                "--tolerance-config",
+                str(config),
+            ],
+        )
+        assert "per-table tolerances" in result.stdout
+        assert result.exit_code == 1
+
+    def test_nearby_config_is_discovered(self, tmp_path, fixtures_dir, results_dir) -> None:
+        (tmp_path / "recheck.toml").write_text(
+            '[tolerance]\nrelative = 0.05\n\n[tolerance.tables."tab:scales"]\nabsolute = 5.0\n'
+        )
+        result = runner.invoke(
+            app,
+            [
+                "diff",
+                str(self._paper(tmp_path, fixtures_dir)),
+                str(results_dir / "demo_results.json"),
+            ],
+        )
+        assert "recheck.toml" in result.stdout
+
+    def test_bad_config_exits_two(self, tmp_path, fixtures_dir, results_dir) -> None:
+        config = tmp_path / "bad.toml"
+        config.write_text("[tolerance]\nwobble = 3\n")
+        result = runner.invoke(
+            app,
+            [
+                "diff",
+                str(self._paper(tmp_path, fixtures_dir)),
+                str(results_dir / "demo_results.json"),
+                "--tolerance-config",
+                str(config),
+            ],
+        )
+        assert result.exit_code == 2
+
+    def test_run_accepts_the_option(self, fixtures_dir) -> None:
+        result = runner.invoke(app, ["run", "--help"])
+        assert "--tolerance-config" in result.stdout
