@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "run": {
+    "repo": "https://github.com/example/garden-path-scales",
+    "commit": "a3f91c2",
+    "note": "hand-written fixture: every diff status is represented on purpose"
+  },
+  "cells": [
+    {
+      "address": "Table 1 › GPT-2-small › NP/Z",
+      "value": 0.95,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › GPT-2-small › NP/S",
+      "value": 0.68,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › GPT-2-small › Overall",
+      "value": 0.52,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › GPT-2-large › NP/Z",
+      "value": 1.55,
+      "uncertainty": 0.18,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › GPT-2-large › NP/S",
+      "value": 0.9,
+      "uncertainty": 0.2,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › GPT-2-large › Overall",
+      "value": 1.17,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › Pythia-1.4B › NP/Z",
+      "value": 1.19,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › Pythia-1.4B › NP/S",
+      "value": -0.05,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › Pythia-1.4B › Overall",
+      "value": 1.06,
+      "n_seeds": 3
+    },
+    {
+      "address": "Table 1 › Llama-2-7B › NP/Z",
+      "failure": {
+        "code": "ENV_UNRESOLVABLE",
+        "evidence": "requirements.txt pins torch==2.0.1 and transformers==4.51.0; transformers 4.51 requires torch>=2.1, so no resolution exists"
+      }
+    },
+    {
+      "address": "Table 1 › Llama-2-7B › NP/S",
+      "failure": {
+        "code": "MISSING_DEPENDENCY",
+        "evidence": "score_surprisal_multimodel.py imports sentencepiece, which is absent from requirements.txt and fails to build on python 3.11"
+      }
+    },
+    {
+      "address": "Table 1 › Llama-2-7B › Overall",
+      "failure": {
+        "code": "BUDGET_EXCEEDED",
+        "evidence": "scoring 144 items on Llama-2-7B needed an estimated 3.2 GPU-hours against a --max-gpu of 1.0"
+      }
+    },
+    {
+      "address": "Table 1 › GPT-2-xl › NP/Z",
+      "value": 1.31,
+      "n_seeds": 3
+    }
+  ]
+}

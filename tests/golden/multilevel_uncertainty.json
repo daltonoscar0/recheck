@@ -1,0 +1,214 @@
+{
+  "schema_version": "1.0",
+  "source": {},
+  "tables": [
+    {
+      "id": "tab:npz",
+      "index": 1,
+      "label": "tab:npz",
+      "caption": "Surprisal difference in bits at the disambiguating region, mean ± standard deviation over three seeds. Bold marks the smallest effect per column.",
+      "environment": "tabularx",
+      "column_headers": [
+        [
+          "Model"
+        ],
+        [
+          "Condition"
+        ],
+        [
+          "Surprisal Δ",
+          "NP/Z"
+        ],
+        [
+          "Surprisal Δ",
+          "NP/S"
+        ]
+      ],
+      "cells": [
+        {
+          "address": "Table 1 › GPT-2-large › Ambiguous › Surprisal Δ › NP/Z",
+          "row_path": [
+            "GPT-2-large",
+            "Ambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/Z"
+          ],
+          "row": 1,
+          "col": 2,
+          "raw": "$1.42 \\pm 0.21$",
+          "text": "1.42 ± 0.21",
+          "is_numeric": true,
+          "value": 1.42,
+          "uncertainty": 0.21,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Ambiguous › Surprisal Δ › NP/S",
+          "row_path": [
+            "GPT-2-large",
+            "Ambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/S"
+          ],
+          "row": 1,
+          "col": 3,
+          "raw": "$0.88 \\pm 0.19$",
+          "text": "0.88 ± 0.19",
+          "is_numeric": true,
+          "value": 0.88,
+          "uncertainty": 0.19,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Unambiguous › Surprisal Δ › NP/Z",
+          "row_path": [
+            "GPT-2-large",
+            "Unambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/Z"
+          ],
+          "row": 2,
+          "col": 2,
+          "raw": "$\\textbf{0.31} \\pm 0.11$",
+          "text": "0.31 ± 0.11",
+          "is_numeric": true,
+          "value": 0.31,
+          "uncertainty": 0.11,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [
+            "bold"
+          ],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Unambiguous › Surprisal Δ › NP/S",
+          "row_path": [
+            "GPT-2-large",
+            "Unambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/S"
+          ],
+          "row": 2,
+          "col": 3,
+          "raw": "$0.24 \\pm 0.09$",
+          "text": "0.24 ± 0.09",
+          "is_numeric": true,
+          "value": 0.24,
+          "uncertainty": 0.09,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Ambiguous › Surprisal Δ › NP/Z",
+          "row_path": [
+            "Pythia-1.4B",
+            "Ambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/Z"
+          ],
+          "row": 3,
+          "col": 2,
+          "raw": "$1.19 \\pm 0.24$",
+          "text": "1.19 ± 0.24",
+          "is_numeric": true,
+          "value": 1.19,
+          "uncertainty": 0.24,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Ambiguous › Surprisal Δ › NP/S",
+          "row_path": [
+            "Pythia-1.4B",
+            "Ambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/S"
+          ],
+          "row": 3,
+          "col": 3,
+          "raw": "$0.79 \\pm 0.22$",
+          "text": "0.79 ± 0.22",
+          "is_numeric": true,
+          "value": 0.79,
+          "uncertainty": 0.22,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Unambiguous › Surprisal Δ › NP/Z",
+          "row_path": [
+            "Pythia-1.4B",
+            "Unambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/Z"
+          ],
+          "row": 4,
+          "col": 2,
+          "raw": "$0.28 \\pm 0.13$",
+          "text": "0.28 ± 0.13",
+          "is_numeric": true,
+          "value": 0.28,
+          "uncertainty": 0.13,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Unambiguous › Surprisal Δ › NP/S",
+          "row_path": [
+            "Pythia-1.4B",
+            "Unambiguous"
+          ],
+          "col_path": [
+            "Surprisal Δ",
+            "NP/S"
+          ],
+          "row": 4,
+          "col": 3,
+          "raw": "$0.21 \\pm 0.10$",
+          "text": "0.21 ± 0.10",
+          "is_numeric": true,
+          "value": 0.21,
+          "uncertainty": 0.1,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        }
+      ],
+      "context": {
+        "referencing_paragraphs": [
+          "Table 1 breaks the effect down by construction and condition. Standard deviations are over three seeds. The NP/Z contrast is reliably larger than NP/S in both models."
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,407 @@
+{
+  "schema_version": "1.0",
+  "source": {},
+  "tables": [
+    {
+      "id": "tab:probe",
+      "index": 1,
+      "label": "tab:probe",
+      "caption": "Accuracy (%) on the NP/Z probe set. Best per column in bold.",
+      "environment": "tabular",
+      "column_headers": [
+        [
+          "Method"
+        ],
+        [
+          "Dev"
+        ],
+        [
+          "Test"
+        ],
+        [
+          "Δ"
+        ]
+      ],
+      "cells": [
+        {
+          "address": "Table 1 › Baseline › Dev",
+          "row_path": [
+            "Baseline"
+          ],
+          "col_path": [
+            "Dev"
+          ],
+          "row": 1,
+          "col": 1,
+          "raw": "71.2",
+          "text": "71.2",
+          "is_numeric": true,
+          "value": 71.2,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Baseline › Test",
+          "row_path": [
+            "Baseline"
+          ],
+          "col_path": [
+            "Test"
+          ],
+          "row": 1,
+          "col": 2,
+          "raw": "69.8",
+          "text": "69.8",
+          "is_numeric": true,
+          "value": 69.8,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Baseline › Δ",
+          "row_path": [
+            "Baseline"
+          ],
+          "col_path": [
+            "Δ"
+          ],
+          "row": 1,
+          "col": 3,
+          "raw": "--",
+          "text": "–",
+          "is_numeric": false,
+          "value": null,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › + finetune › Dev",
+          "row_path": [
+            "+ finetune"
+          ],
+          "col_path": [
+            "Dev"
+          ],
+          "row": 2,
+          "col": 1,
+          "raw": "\\textbf{78.4}",
+          "text": "78.4",
+          "is_numeric": true,
+          "value": 78.4,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [
+            "bold"
+          ],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › + finetune › Test",
+          "row_path": [
+            "+ finetune"
+          ],
+          "col_path": [
+            "Test"
+          ],
+          "row": 2,
+          "col": 2,
+          "raw": "76.1",
+          "text": "76.1",
+          "is_numeric": true,
+          "value": 76.1,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › + finetune › Δ",
+          "row_path": [
+            "+ finetune"
+          ],
+          "col_path": [
+            "Δ"
+          ],
+          "row": 2,
+          "col": 3,
+          "raw": "+6.3",
+          "text": "+6.3",
+          "is_numeric": true,
+          "value": 6.3,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › + finetune, 3 seeds › Dev",
+          "row_path": [
+            "+ finetune, 3 seeds"
+          ],
+          "col_path": [
+            "Dev"
+          ],
+          "row": 3,
+          "col": 1,
+          "raw": "78.1 (0.4)",
+          "text": "78.1 (0.4)",
+          "is_numeric": true,
+          "value": 78.1,
+          "uncertainty": 0.4,
+          "uncertainty_kind": "paren",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › + finetune, 3 seeds › Test",
+          "row_path": [
+            "+ finetune, 3 seeds"
+          ],
+          "col_path": [
+            "Test"
+          ],
+          "row": 3,
+          "col": 2,
+          "raw": "75.9 (0.6)",
+          "text": "75.9 (0.6)",
+          "is_numeric": true,
+          "value": 75.9,
+          "uncertainty": 0.6,
+          "uncertainty_kind": "paren",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › + finetune, 3 seeds › Δ",
+          "row_path": [
+            "+ finetune, 3 seeds"
+          ],
+          "col_path": [
+            "Δ"
+          ],
+          "row": 3,
+          "col": 3,
+          "raw": "+6.1",
+          "text": "+6.1",
+          "is_numeric": true,
+          "value": 6.1,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        }
+      ],
+      "context": {
+        "referencing_paragraphs": [
+          "As shown in Table 1, finetuning helps on dev but transfers less well to test. The second table has no label at all and is referenced only by position, so extraction has to synthesise an identity for it."
+        ]
+      }
+    },
+    {
+      "id": "table-2",
+      "index": 2,
+      "label": null,
+      "caption": "Surprisal deltas grouped by construction. No label on this one.",
+      "environment": "tabular",
+      "column_headers": [
+        [
+          "Construction"
+        ],
+        [
+          "GPT-2-large"
+        ],
+        [
+          "Pythia-1.4B"
+        ]
+      ],
+      "cells": [
+        {
+          "address": "Table 2 › Ambiguous › NP/Z › GPT-2-large",
+          "row_path": [
+            "Ambiguous",
+            "NP/Z"
+          ],
+          "col_path": [
+            "GPT-2-large"
+          ],
+          "row": 1,
+          "col": 1,
+          "raw": "1.42",
+          "text": "1.42",
+          "is_numeric": true,
+          "value": 1.42,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Ambiguous › NP/Z › Pythia-1.4B",
+          "row_path": [
+            "Ambiguous",
+            "NP/Z"
+          ],
+          "col_path": [
+            "Pythia-1.4B"
+          ],
+          "row": 1,
+          "col": 2,
+          "raw": "1.19",
+          "text": "1.19",
+          "is_numeric": true,
+          "value": 1.19,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Ambiguous › NP/S › GPT-2-large",
+          "row_path": [
+            "Ambiguous",
+            "NP/S"
+          ],
+          "col_path": [
+            "GPT-2-large"
+          ],
+          "row": 2,
+          "col": 1,
+          "raw": "0.88",
+          "text": "0.88",
+          "is_numeric": true,
+          "value": 0.88,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Ambiguous › NP/S › Pythia-1.4B",
+          "row_path": [
+            "Ambiguous",
+            "NP/S"
+          ],
+          "col_path": [
+            "Pythia-1.4B"
+          ],
+          "row": 2,
+          "col": 2,
+          "raw": "0.79",
+          "text": "0.79",
+          "is_numeric": true,
+          "value": 0.79,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Unambiguous › NP/Z › GPT-2-large",
+          "row_path": [
+            "Unambiguous",
+            "NP/Z"
+          ],
+          "col_path": [
+            "GPT-2-large"
+          ],
+          "row": 3,
+          "col": 1,
+          "raw": "0.31",
+          "text": "0.31",
+          "is_numeric": true,
+          "value": 0.31,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Unambiguous › NP/Z › Pythia-1.4B",
+          "row_path": [
+            "Unambiguous",
+            "NP/Z"
+          ],
+          "col_path": [
+            "Pythia-1.4B"
+          ],
+          "row": 3,
+          "col": 2,
+          "raw": "0.28",
+          "text": "0.28",
+          "is_numeric": true,
+          "value": 0.28,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Unambiguous › NP/S › GPT-2-large",
+          "row_path": [
+            "Unambiguous",
+            "NP/S"
+          ],
+          "col_path": [
+            "GPT-2-large"
+          ],
+          "row": 4,
+          "col": 1,
+          "raw": "0.24",
+          "text": "0.24",
+          "is_numeric": true,
+          "value": 0.24,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 2 › Unambiguous › NP/S › Pythia-1.4B",
+          "row_path": [
+            "Unambiguous",
+            "NP/S"
+          ],
+          "col_path": [
+            "Pythia-1.4B"
+          ],
+          "row": 4,
+          "col": 2,
+          "raw": "0.21",
+          "text": "0.21",
+          "is_numeric": true,
+          "value": 0.21,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        }
+      ],
+      "context": {
+        "referencing_paragraphs": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "schema_version": "1.0",
+  "source": {},
+  "tables": [
+    {
+      "id": "tab:calibration",
+      "index": 1,
+      "label": "tab:calibration",
+      "caption": "Mean surprisal in bits at the critical region for NP/Z items, mean ± standard deviation over 72 items per cell.",
+      "environment": "tabular",
+      "column_headers": [
+        [
+          "Model"
+        ],
+        [
+          "Ambiguous"
+        ],
+        [
+          "Control"
+        ],
+        [
+          "Δ"
+        ]
+      ],
+      "cells": [
+        {
+          "address": "Table 1 › GPT-2-large › Ambiguous",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "Ambiguous"
+          ],
+          "row": 1,
+          "col": 1,
+          "raw": "$16.88 \\pm 3.07$",
+          "text": "16.88 ± 3.07",
+          "is_numeric": true,
+          "value": 16.88,
+          "uncertainty": 3.07,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Control",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "Control"
+          ],
+          "row": 1,
+          "col": 2,
+          "raw": "$10.77 \\pm 2.94$",
+          "text": "10.77 ± 2.94",
+          "is_numeric": true,
+          "value": 10.77,
+          "uncertainty": 2.94,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Δ",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "Δ"
+          ],
+          "row": 1,
+          "col": 3,
+          "raw": "6.11",
+          "text": "6.11",
+          "is_numeric": true,
+          "value": 6.11,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Ambiguous",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "Ambiguous"
+          ],
+          "row": 2,
+          "col": 1,
+          "raw": "$16.74 \\pm 3.28$",
+          "text": "16.74 ± 3.28",
+          "is_numeric": true,
+          "value": 16.74,
+          "uncertainty": 3.28,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Control",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "Control"
+          ],
+          "row": 2,
+          "col": 2,
+          "raw": "$11.21 \\pm 3.13$",
+          "text": "11.21 ± 3.13",
+          "is_numeric": true,
+          "value": 11.21,
+          "uncertainty": 3.13,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Δ",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "Δ"
+          ],
+          "row": 2,
+          "col": 3,
+          "raw": "5.54",
+          "text": "5.54",
+          "is_numeric": true,
+          "value": 5.54,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-3 davinci › Ambiguous",
+          "row_path": [
+            "GPT-3 davinci"
+          ],
+          "col_path": [
+            "Ambiguous"
+          ],
+          "row": 3,
+          "col": 1,
+          "raw": "$15.02 \\pm 2.81$",
+          "text": "15.02 ± 2.81",
+          "is_numeric": true,
+          "value": 15.02,
+          "uncertainty": 2.81,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-3 davinci › Control",
+          "row_path": [
+            "GPT-3 davinci"
+          ],
+          "col_path": [
+            "Control"
+          ],
+          "row": 3,
+          "col": 2,
+          "raw": "$9.88 \\pm 2.67$",
+          "text": "9.88 ± 2.67",
+          "is_numeric": true,
+          "value": 9.88,
+          "uncertainty": 2.67,
+          "uncertainty_kind": "pm",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-3 davinci › Δ",
+          "row_path": [
+            "GPT-3 davinci"
+          ],
+          "col_path": [
+            "Δ"
+          ],
+          "row": 3,
+          "col": 3,
+          "raw": "5.14",
+          "text": "5.14",
+          "is_numeric": true,
+          "value": 5.14,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        }
+      ],
+      "context": {
+        "referencing_paragraphs": [
+          "Table 1 reports mean surprisal at the critical region for NP/Z items in the ambiguous and control conditions. The garden-path effect is the difference between them, and it is comparable across the two open models."
+        ]
+      }
+    }
+  ]
+}

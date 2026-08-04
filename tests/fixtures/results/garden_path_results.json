@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "run": {
+    "repo": "/Users/oscardalton/price-of-reanalysis",
+    "commit": "76c4369",
+    "note": "aggregated from committed per-item surprisal CSVs, not re-scored"
+  },
+  "cells": [
+    {
+      "address": "Table 1 › GPT-2-large › Ambiguous",
+      "value": 16.879,
+      "uncertainty": 3.074,
+      "n_seeds": 1
+    },
+    {
+      "address": "Table 1 › GPT-2-large › Control",
+      "value": 10.765,
+      "uncertainty": 2.939,
+      "n_seeds": 1
+    },
+    {
+      "address": "Table 1 › GPT-2-large › Δ",
+      "value": 6.114
+    },
+    {
+      "address": "Table 1 › Pythia-1.4B › Ambiguous",
+      "value": 16.743,
+      "uncertainty": 3.282,
+      "n_seeds": 1
+    },
+    {
+      "address": "Table 1 › Pythia-1.4B › Control",
+      "value": 11.207,
+      "uncertainty": 3.134,
+      "n_seeds": 1
+    },
+    {
+      "address": "Table 1 › Pythia-1.4B › Δ",
+      "value": 5.536
+    },
+    {
+      "address": "Table 1 › GPT-3 davinci › Ambiguous",
+      "failure": {
+        "code": "MISSING_CHECKPOINT",
+        "evidence": "openai/davinci is API-gated and no local checkpoint is published; the repo contains no scoring path for it (score_surprisal_multimodel.py enumerates only HuggingFace model ids)"
+      }
+    },
+    {
+      "address": "Table 1 › GPT-3 davinci › Control",
+      "failure": {
+        "code": "MISSING_CHECKPOINT",
+        "evidence": "openai/davinci is API-gated and no local checkpoint is published; the repo contains no scoring path for it (score_surprisal_multimodel.py enumerates only HuggingFace model ids)"
+      }
+    },
+    {
+      "address": "Table 1 › GPT-3 davinci › Δ",
+      "failure": {
+        "code": "MISSING_CHECKPOINT",
+        "evidence": "openai/davinci is API-gated and no local checkpoint is published; the repo contains no scoring path for it (score_surprisal_multimodel.py enumerates only HuggingFace model ids)"
+      }
+    }
+  ]
+}

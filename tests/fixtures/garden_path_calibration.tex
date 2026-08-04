@@ -1,0 +1,33 @@
+\documentclass[11pt]{article}
+\usepackage{booktabs}
+
+% Calibration fixture. The numbers in this table are the real aggregates from
+% the Price of Reanalysis phase-1 surprisal data, transcribed the way a paper
+% would print them. The GPT-3 davinci row is the honest unrunnable case: the
+% model is API-gated and no checkpoint exists to score locally.
+
+\begin{document}
+
+\section{Surprisal at the critical region}
+
+Table~\ref{tab:calibration} reports mean surprisal at the critical region for
+NP/Z items in the ambiguous and control conditions. The garden-path effect is
+the difference between them, and it is comparable across the two open models.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Model & Ambiguous & Control & $\Delta$ \\
+\midrule
+GPT-2-large   & $16.88 \pm 3.07$ & $10.77 \pm 2.94$ & 6.11 \\
+Pythia-1.4B   & $16.74 \pm 3.28$ & $11.21 \pm 3.13$ & 5.54 \\
+GPT-3 davinci & $15.02 \pm 2.81$ & $9.88 \pm 2.67$  & 5.14 \\
+\bottomrule
+\end{tabular}
+\caption{Mean surprisal in bits at the critical region for NP/Z items,
+mean $\pm$ standard deviation over 72 items per cell.}
+\label{tab:calibration}
+\end{table}
+
+\end{document}

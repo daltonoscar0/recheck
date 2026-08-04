@@ -1,0 +1,29 @@
+\documentclass[11pt]{article}
+\usepackage{booktabs}
+
+\begin{document}
+
+\section{Surprisal at the disambiguating region}
+
+We score every item with both models and take the mean log-probability at the
+disambiguating word. Table~\ref{tab:surprisal} reports the result: both models
+assign higher surprisal to the ambiguous condition, and GPT-2-large shows the
+larger effect.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lcc}
+\toprule
+Model & Ambiguous & Unambiguous \\
+\midrule
+GPT-2-large & 8.42 & 6.10 \\
+Pythia-1.4B & 7.95 & 6.33 \\
+\bottomrule
+\end{tabular}
+\caption{Mean surprisal in bits at the disambiguating region, NP/Z items.}
+\label{tab:surprisal}
+\end{table}
+
+The gap between conditions is what we call the garden-path effect throughout.
+
+\end{document}

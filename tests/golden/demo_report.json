@@ -1,0 +1,334 @@
+{
+  "schema_version": "1.0",
+  "source": {},
+  "tables": [
+    {
+      "id": "tab:scales",
+      "index": 1,
+      "label": "tab:scales",
+      "caption": "Surprisal difference in bits at the disambiguating region. Values in parentheses are standard deviations over three seeds where reported.",
+      "environment": "tabular",
+      "column_headers": [
+        [
+          "Model"
+        ],
+        [
+          "NP/Z"
+        ],
+        [
+          "NP/S"
+        ],
+        [
+          "Overall"
+        ]
+      ],
+      "cells": [
+        {
+          "address": "Table 1 › GPT-2-small › NP/Z",
+          "row_path": [
+            "GPT-2-small"
+          ],
+          "col_path": [
+            "NP/Z"
+          ],
+          "row": 1,
+          "col": 1,
+          "raw": "0.94",
+          "text": "0.94",
+          "is_numeric": true,
+          "value": 0.94,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-small › NP/S",
+          "row_path": [
+            "GPT-2-small"
+          ],
+          "col_path": [
+            "NP/S"
+          ],
+          "row": 1,
+          "col": 2,
+          "raw": "0.61",
+          "text": "0.61",
+          "is_numeric": true,
+          "value": 0.61,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-small › Overall",
+          "row_path": [
+            "GPT-2-small"
+          ],
+          "col_path": [
+            "Overall"
+          ],
+          "row": 1,
+          "col": 3,
+          "raw": "0.78",
+          "text": "0.78",
+          "is_numeric": true,
+          "value": 0.78,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › NP/Z",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "NP/Z"
+          ],
+          "row": 2,
+          "col": 1,
+          "raw": "1.42 (0.21)",
+          "text": "1.42 (0.21)",
+          "is_numeric": true,
+          "value": 1.42,
+          "uncertainty": 0.21,
+          "uncertainty_kind": "paren",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › NP/S",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "NP/S"
+          ],
+          "row": 2,
+          "col": 2,
+          "raw": "0.88 (0.19)",
+          "text": "0.88 (0.19)",
+          "is_numeric": true,
+          "value": 0.88,
+          "uncertainty": 0.19,
+          "uncertainty_kind": "paren",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Overall",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "Overall"
+          ],
+          "row": 2,
+          "col": 3,
+          "raw": "1.15",
+          "text": "1.15",
+          "is_numeric": true,
+          "value": 1.15,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › NP/Z",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "NP/Z"
+          ],
+          "row": 3,
+          "col": 1,
+          "raw": "1.19",
+          "text": "1.19",
+          "is_numeric": true,
+          "value": 1.19,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › NP/S",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "NP/S"
+          ],
+          "row": 3,
+          "col": 2,
+          "raw": "0.79",
+          "text": "0.79",
+          "is_numeric": true,
+          "value": 0.79,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Overall",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "Overall"
+          ],
+          "row": 3,
+          "col": 3,
+          "raw": "0.99",
+          "text": "0.99",
+          "is_numeric": true,
+          "value": 0.99,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Llama-2-7B › NP/Z",
+          "row_path": [
+            "Llama-2-7B"
+          ],
+          "col_path": [
+            "NP/Z"
+          ],
+          "row": 4,
+          "col": 1,
+          "raw": "1.63",
+          "text": "1.63",
+          "is_numeric": true,
+          "value": 1.63,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Llama-2-7B › NP/S",
+          "row_path": [
+            "Llama-2-7B"
+          ],
+          "col_path": [
+            "NP/S"
+          ],
+          "row": 4,
+          "col": 2,
+          "raw": "1.02",
+          "text": "1.02",
+          "is_numeric": true,
+          "value": 1.02,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Llama-2-7B › Overall",
+          "row_path": [
+            "Llama-2-7B"
+          ],
+          "col_path": [
+            "Overall"
+          ],
+          "row": 4,
+          "col": 3,
+          "raw": "1.33",
+          "text": "1.33",
+          "is_numeric": true,
+          "value": 1.33,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-4 › NP/Z",
+          "row_path": [
+            "GPT-4"
+          ],
+          "col_path": [
+            "NP/Z"
+          ],
+          "row": 5,
+          "col": 1,
+          "raw": "1.80",
+          "text": "1.80",
+          "is_numeric": true,
+          "value": 1.8,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-4 › NP/S",
+          "row_path": [
+            "GPT-4"
+          ],
+          "col_path": [
+            "NP/S"
+          ],
+          "row": 5,
+          "col": 2,
+          "raw": "1.11",
+          "text": "1.11",
+          "is_numeric": true,
+          "value": 1.11,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-4 › Overall",
+          "row_path": [
+            "GPT-4"
+          ],
+          "col_path": [
+            "Overall"
+          ],
+          "row": 5,
+          "col": 3,
+          "raw": "1.46",
+          "text": "1.46",
+          "is_numeric": true,
+          "value": 1.46,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        }
+      ],
+      "context": {
+        "referencing_paragraphs": [
+          "Table 1 reports the surprisal difference between the ambiguous and control conditions for each model, split by construction."
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+\documentclass[11pt]{article}
+\usepackage{booktabs}
+
+% Demo fixture. Paired with tests/fixtures/results/demo_results.json, which is
+% hand-written to produce every status the diff engine can emit.
+
+\begin{document}
+
+\section{Garden-path effect across model scales}
+
+Table~\ref{tab:scales} reports the surprisal difference between the ambiguous
+and control conditions for each model, split by construction.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Model & NP/Z & NP/S & Overall \\
+\midrule
+GPT-2-small & 0.94 & 0.61 & 0.78 \\
+GPT-2-large & 1.42 (0.21) & 0.88 (0.19) & 1.15 \\
+Pythia-1.4B & 1.19 & 0.79 & 0.99 \\
+Llama-2-7B & 1.63 & 1.02 & 1.33 \\
+GPT-4 & 1.80 & 1.11 & 1.46 \\
+\bottomrule
+\end{tabular}
+\caption{Surprisal difference in bits at the disambiguating region. Values in
+parentheses are standard deviations over three seeds where reported.}
+\label{tab:scales}
+\end{table}
+
+\end{document}

@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "source": {},
+  "tables": [
+    {
+      "id": "tab:surprisal",
+      "index": 1,
+      "label": "tab:surprisal",
+      "caption": "Mean surprisal in bits at the disambiguating region, NP/Z items.",
+      "environment": "tabular",
+      "column_headers": [
+        [
+          "Model"
+        ],
+        [
+          "Ambiguous"
+        ],
+        [
+          "Unambiguous"
+        ]
+      ],
+      "cells": [
+        {
+          "address": "Table 1 › GPT-2-large › Ambiguous",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "Ambiguous"
+          ],
+          "row": 1,
+          "col": 1,
+          "raw": "8.42",
+          "text": "8.42",
+          "is_numeric": true,
+          "value": 8.42,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › GPT-2-large › Unambiguous",
+          "row_path": [
+            "GPT-2-large"
+          ],
+          "col_path": [
+            "Unambiguous"
+          ],
+          "row": 1,
+          "col": 2,
+          "raw": "6.10",
+          "text": "6.10",
+          "is_numeric": true,
+          "value": 6.1,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Ambiguous",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "Ambiguous"
+          ],
+          "row": 2,
+          "col": 1,
+          "raw": "7.95",
+          "text": "7.95",
+          "is_numeric": true,
+          "value": 7.95,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        },
+        {
+          "address": "Table 1 › Pythia-1.4B › Unambiguous",
+          "row_path": [
+            "Pythia-1.4B"
+          ],
+          "col_path": [
+            "Unambiguous"
+          ],
+          "row": 2,
+          "col": 2,
+          "raw": "6.33",
+          "text": "6.33",
+          "is_numeric": true,
+          "value": 6.33,
+          "uncertainty": null,
+          "uncertainty_kind": "none",
+          "unit": "none",
+          "emphasis": [],
+          "markers": []
+        }
+      ],
+      "context": {
+        "referencing_paragraphs": [
+          "We score every item with both models and take the mean log-probability at the disambiguating word. Table 1 reports the result: both models assign higher surprisal to the ambiguous condition, and GPT-2-large shows the larger effect."
+        ]
+      }
+    }
+  ]
+}

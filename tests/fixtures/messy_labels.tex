@@ -1,0 +1,49 @@
+\documentclass[11pt]{article}
+\usepackage{multirow}
+
+\begin{document}
+
+\section{Probing results}
+
+% The caption comes before the tabular here and swallows the label, which is
+% the wiring style this fixture exists to pin down.
+As shown in Table \ref{tab:probe}, finetuning helps on dev but transfers less
+well to test. The second table has no label at all and is referenced only by
+position, so extraction has to synthesise an identity for it.
+
+\begin{table}[htbp]
+\caption{Accuracy (\%) on the \textsc{NP/Z} probe set. {\bf Best} per column in
+bold.\label{tab:probe}}
+\centering
+\begin{tabular}{lrrr}
+\hline
+Method & Dev & Test & $\Delta$ \\
+\hline
+Baseline & 71.2 & 69.8 & -- \\
++ finetune & \textbf{78.4} & 76.1 & +6.3 \\
++ finetune, 3 seeds & 78.1 (0.4) & 75.9 (0.6) & +6.1 \\
+\hline
+\end{tabular}
+\end{table}
+
+A second, unlabelled table groups the same numbers by construction.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lrr}
+\hline
+Construction & GPT-2-large & Pythia-1.4B \\
+\hline
+\multicolumn{3}{l}{\emph{Ambiguous}} \\
+NP/Z & 1.42 & 1.19 \\
+NP/S & 0.88 & 0.79 \\
+\hline
+\multicolumn{3}{l}{\emph{Unambiguous}} \\
+NP/Z & 0.31 & 0.28 \\
+NP/S & 0.24 & 0.21 \\
+\hline
+\end{tabular}
+\caption{Surprisal deltas grouped by construction. No label on this one.}
+\end{table}
+
+\end{document}
