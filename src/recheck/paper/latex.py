@@ -72,6 +72,8 @@ _CMD_END = r"(?![a-zA-Z])"
 _SYMBOL_REPLACEMENTS = [
     (r"\\" + name + _CMD_END, char) for name, char in _GREEK.items()
 ] + [
+    (r"\\\{", "\x00"),
+    (r"\\\}", "\x01"),
     (r"\\%", "%"),
     (r"\\&", "&"),
     (r"\\_", "_"),
@@ -457,4 +459,7 @@ def flatten(text: str) -> str:
         text,
     )
     text = text.replace("{", " ").replace("}", " ")
+    # Restore the braces that were escaped in the source, now that grouping
+    # braces are gone. `\{\ldots\}` is the characters "{…}", not markup.
+    text = text.replace("\x00", "{").replace("\x01", "}")
     return re.sub(r"\s+", " ", text).strip()

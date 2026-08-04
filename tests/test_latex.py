@@ -191,3 +191,13 @@ class TestMacroExpansion:
 
     def test_real_spacing_around_math_survives(self) -> None:
         assert flatten(r"$a$ and $b$") == "a and b"
+
+    def test_escaped_braces_are_literal_characters(self) -> None:
+        # `\{\ldots\}` is the text "{…}". Stripping the braces as grouping and
+        # leaving the backslashes behind put raw LaTeX into a cell address.
+        assert flatten(r"grounder \{\ldots\}") == "grounder {…}"
+        assert flatten(r"a \{b\} c") == "a {b} c"
+
+    def test_grouping_braces_are_still_removed(self) -> None:
+        assert flatten(r"\textbf{bold}") == "bold"
+        assert flatten(r"{plain}") == "plain"
