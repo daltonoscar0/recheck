@@ -16,7 +16,7 @@ something true about the paper.
 
 ---
 
-## Status: milestone 1
+## Status: milestone 2
 
 | | |
 | --- | --- |
@@ -24,12 +24,15 @@ something true about the paper.
 | Diff engine + failure taxonomy | ✅ working |
 | Terminal and markdown reports | ✅ working |
 | arXiv source fetching | ✅ written, network test marked |
-| Sandboxed execution, budgets | ⬜ milestone 2 — see [NEXT.md](NEXT.md) |
-| Script-to-table mapping | ⬜ milestone 2 |
+| Repo acquisition, read-only + pinned | ✅ working |
+| Script-to-table mapping | ✅ working, deterministic |
+| Sandboxed execution, budgets | ✅ working |
+| Container sandbox backend | ⬜ milestone 3 — see [NEXT.md](NEXT.md) |
+| Two public papers, launch | ⬜ milestone 3 |
 
-`recheck run` today extracts the paper and tells you plainly that execution is
-not wired up. It does not pretend to have run anything. Until milestone 2
-lands, you supply the results file.
+`recheck run` now does the whole thing: pulls the paper's LaTeX, copies the
+repo read-only, works out which script produces which table, runs what fits in
+the budget, and grades every cell. Nothing in that path is hand-written JSON.
 
 ---
 
@@ -46,13 +49,14 @@ uv run recheck --help
 ## Quickstart
 
 ```bash
-# Paper side: arXiv ID, URL, tarball, directory, or a single .tex file
+# The whole pipeline: extract, reproduce, diff
+uv run recheck run 2401.12345 --repo https://github.com/example/paper-code \
+    --max-hours 2 --max-gpu 0 --out report.md
+
+# Paper side alone: arXiv ID, URL, tarball, directory, or a single .tex file
 uv run recheck extract 2401.12345 --out paper.json
 
-# Diff against freshly-run numbers
-uv run recheck diff paper.json results.json
-
-# Write the markdown artifact
+# Diff a results file you produced yourself
 uv run recheck diff paper.json results.json --out report.md
 ```
 
@@ -62,14 +66,84 @@ See the whole thing on real fixtures:
 ./scripts/demo.sh
 ```
 
-Exit codes: `0` clean, `1` at least one RED cell, `2` bad input, `3` the
-requested stage is not implemented yet. Usable in CI without parsing output.
+Exit codes: `0` clean, `1` at least one RED cell, `2` bad input. (`3` is
+reserved; it used to mean "stage not implemented".) Usable in CI without
+parsing output.
+
+---
+
+## Running a paper
+
+```bash
+uv run recheck run <paper> --repo <url-or-path> [options]
+```
+
+`<paper>` is an arXiv ID or URL, a tarball, a directory, or a `.tex` file.
+`--repo` is required — reproducing a paper without its code is not a thing
+recheck can do.
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--max-hours` | `2.0` | Wall-clock ceiling for the whole run |
+| `--max-gpu` | `1.0` | GPU-hour ceiling |
+| `--max-download-mb` | `512` | Ceiling on model weights a run may pull |
+| `--out` | — | Write the markdown report here |
+| `--results-out` | — | Write the raw `results.json` here |
+| `--workdir` | temp dir | Keep the sandbox instead of deleting it |
+| `--plan-cache` | `~/.cache/recheck/plans` | Where mappings are cached |
+| `--refresh-plan` | off | Recompute the mapping, ignoring the cache |
+| `--allow-dirty` | off | Run against a repo with uncommitted changes |
+| `--no-committed-artifacts` | off | Refuse to fall back to files already in the repo |
+| `--tolerance`, `--tolerance-config` | | As for `recheck diff` |
+
+**The repo is never mutated.** It is exported at `HEAD` with `git archive` into
+a sandbox workdir — tracked files only, so a repo's `.venv` and `.git` stay
+put — and every write happens in the copy. A dirty local tree is refused by
+default, because a report that cannot name a commit you could check out is not
+worth much.
+
+**Budgets are ceilings, not suggestions.** A run whose *estimate alone* breaches
+one is refused before it starts, with the estimate and the ceiling as evidence.
+A run that breaches one mid-flight is killed at the deadline.
+
+```
+BUDGET_EXCEEDED — score_surprisal_multimodel.py needs an estimated 5930 MB of
+downloads against a --max-download-mb ceiling of 512: score_surprisal_multimodel.py
+loads gpt2-large (~3.1 GB of weights); … loads EleutherAI/pythia-1.4b (~2.7 GB)
+```
+
+**Every cell comes back with a value or a coded reason.** Nothing is dropped —
+an omission would surface as `NOT_ATTEMPTED`, which is a weaker claim about a
+paper than a specific code.
+
+### How a table is matched to a script
+
+A cell address is a list of names the paper chose. A repo spells the same names
+in its filenames and in its categorical column values. When every name in an
+address is accounted for, the cell gets a recipe:
+
+```
+mean(critical_region_surprisal) over phase1_stimuli/surprisal_gpt2-large.csv
+  where condition=ambiguous, construction=NPZ, model=gpt2-large
+```
+
+That recipe is written to `~/.cache/recheck/plans/<commit>.deterministic.json`
+and is meant to be read. When a number looks wrong, "you took the mean of the
+wrong column" is a fixable bug report; "the number is wrong" is not.
+
+There is no model call in this path either. Routing is what everything
+downstream trusts, and a stage that changed its mind between runs would make
+every diff advisory. When no candidate clears the confidence floor, the cells
+get `SCRIPT_NOT_FOUND` naming the scripts that were weighed — recheck does not
+guess.
 
 ---
 
 ## What a report looks like
 
 <!-- generated by `recheck diff --markdown` on tests/fixtures/demo_report.tex -->
+
+**Provenance:** hand-written fixture: every diff status is represented on purpose
 
 **5/9 comparable cells reproduced**
 
@@ -104,6 +178,20 @@ requested stage is not implemented yet. Usable in CI without parsing output.
 Note the two statuses people usually collapse. `⬛ unrunnable` means we tried
 and it cannot run. `⬜ not attempted` means the results file never covered that
 cell. Reporting them as one number would flatter every partial run.
+
+And the provenance line is not decoration. Here is what `recheck run` says
+about the calibration paper on a machine with no GPU and a 512 MB download
+ceiling:
+
+> **Provenance:** numbers aggregated from artifacts committed at `76c4369`, not
+> re-scored; not re-run: `score_surprisal_multimodel.py`
+> (`MISSING_DEPENDENCY`, `BUDGET_EXCEEDED`)
+
+Six of its nine cells came back green. All six were read from data the repo
+committed, because the script that would regenerate them imports `minicons` —
+which `requirements.txt` never pins — and would pull 5.9 GB of checkpoints. A
+reader who does not know that cannot read those six greens correctly, so the
+report says it above the table rather than in a footnote.
 
 ---
 
@@ -180,7 +268,7 @@ which is what a results file joins against, and what you read in the report.
 ## Development
 
 ```bash
-uv run pytest                    # 203 tests
+uv run pytest -m "not network"   # 306 tests, no network
 uv run pytest -m network         # also hit arXiv for real
 uv run ruff check .
 python scripts/update_golden.py  # only when an extraction change is intended
@@ -188,6 +276,19 @@ python scripts/update_golden.py  # only when an extraction change is intended
 
 Golden files are committed. Tests never self-heal — regenerating is a
 deliberate act, and the resulting diff is the thing you review.
+
+Every failure path in the taxonomy is provoked deliberately in
+`tests/test_runner.py` against synthetic repos built on the fly, and each test
+asserts the code *and* that its evidence names something concrete — a file, a
+package, a model, a measured cost. "There is a reason" is not enough to pass,
+because a generic reason is the failure mode this tool exists to prevent.
+
+The calibration fixture is regenerated by the executor itself:
+
+```bash
+python scripts/build_calibration_results.py --repo ~/price-of-reanalysis \
+    --out tests/fixtures/results/garden_path_results.json
+```
 
 ## License
 
@@ -197,6 +298,6 @@ MIT — see [LICENSE](LICENSE).
 
 1. **Table extraction + diff engine** — done.
 2. **Execution agent** — sandboxed env setup, script-to-table mapping, budget
-   enforcement behind `--max-hours` / `--max-gpu`. See [NEXT.md](NEXT.md).
-3. **Launch** — two public probing/surprisal papers end to end, polished
-   report format, README GIF.
+   enforcement behind `--max-hours` / `--max-gpu` / `--max-download-mb` — done.
+3. **Launch** — two public probing/surprisal papers end to end, a container
+   sandbox backend, polished report format, README GIF. See [NEXT.md](NEXT.md).

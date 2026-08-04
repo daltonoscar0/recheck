@@ -1,105 +1,136 @@
-# Milestone 2 — execution agent
+# Milestone 3 — two public papers, and launch
 
-Milestone 1 left the pipeline split cleanly in half. Everything below produces
-a `results.json` that satisfies the contract in [docs/SCHEMA.md](docs/SCHEMA.md);
-the diff engine and both renderers then work unchanged.
+Milestone 2 closed the loop. `recheck run <paper> --repo <url>` acquires the
+repo read-only, maps tables to scripts, enforces three ceilings, runs what
+fits, and grades every cell. There is no hand-written JSON anywhere in that
+path, and the garden-path calibration reproduces from the real repo —
+`scripts/build_calibration_results.py` now drives the executor instead of
+knowing the repo's CSV layout, and its output's values are byte-identical to
+the hand-written ones it replaced.
+
+What is left is breadth and polish: prove it on papers nobody here wrote, make
+the sandbox defensible for code nobody here has read, and make the report
+something you would put in a README.
 
 ## The seams that were left for this
 
-- **`recheck run` in `src/recheck/cli.py`** already has the final argument
-  surface (`--repo`, `--max-hours`, `--max-gpu`, `--out`, `--tolerance`) and
-  currently extracts, reports that execution is pending, and exits 3. Replace
-  the body between extraction and the exit; do not change the signature.
-- **`Results` / `ResultCell` in `src/recheck/schema.py`** are the only types
-  the executor needs to emit. `ResultCell` already carries `failure_code` and
-  `evidence`, and `to_dict` already enforces value-xor-failure.
-- **`FailureCode` in `src/recheck/diff/taxonomy.py`** is the complete vocabulary.
-  If the executor needs a code that is not there, add it to the enum *and* to
-  `DESCRIPTIONS` *and* to the table in docs/SCHEMA.md — three places, on purpose.
-- **`Table.referencing_paragraphs`** is already populated by extraction and is
-  currently unused. It exists for the mapper below.
-- **`scripts/build_calibration_results.py`** is a working, hand-written stand-in
-  for the executor against the garden-path repo. It is the reference for the
-  output shape and for how honest `run.note` should be.
+- **`Mapper` in `src/recheck/map/deterministic.py`** is a protocol with one
+  implementation. A model-backed mapper implements `map_paper` and is selected
+  where `RunOptions.mapper` is set; `map/cache.py` already keys plans by
+  `(commit, mapper.name)`, so both can coexist on disk.
+- **`Sandbox` in `src/recheck/exec/sandbox.py`** is a protocol.
+  `LocalSandbox` isolates by process — scrubbed environment, redirected caches,
+  CPU rlimit. A `DockerSandbox` implementing the same three members
+  (`root`, `workdir`, `run`) drops in with no runner changes. `have("docker")`
+  is already there.
+- **`classify` in `src/recheck/exec/runner.py`** turns a failed run's output
+  into a code. It is a flat list of markers; new papers will add markers, and
+  each one wants a test in `TestClassify`.
+- **`KNOWN_WEIGHTS_MB` in `src/recheck/exec/estimate.py`** is a small table
+  plus a parameter-count regex. Wrong sizes cause wrong refusals, so widen it
+  as real papers turn up checkpoints it does not know.
+- **`RepoInventory.artifacts` only holds CSV/TSV.** Papers whose numbers land
+  in JSON, `.jsonl`, or a printed stdout table are not routable yet. The
+  extension point is `sniff_artifact` plus `harvest.aggregate`.
+- **`AggregateRecipe.statistic`** covers mean/median/sum/count/stdev. Anything
+  a paper reports that is not one of those (a fitted coefficient, a p-value)
+  needs either a new statistic or an explicit failure.
 
 ## Work
 
-### 1. Repo acquisition (`src/recheck/repo/`, new)
+### 1. Two public probing/surprisal papers, end to end
 
-Clone or open `--repo` **read-only**. Copy into the sandbox workdir; never
-mutate the source path. Record the resolved commit into `Results.run.commit`.
-Refuse to proceed if the working tree is dirty and the path is local — the
-report must name a commit someone else can check out.
+Pick two with public LaTeX on arXiv and a public repo. For each, run
 
-### 2. Script-to-table mapping (`src/recheck/map/`, new)
+```bash
+uv run recheck run <arxiv-id> --repo <url> --max-gpu 0 --results-out r.json --out report.md
+```
 
-Input: `Table.caption`, `Table.referencing_paragraphs`, `Table.column_headers`,
-plus the repo's README and script inventory. Output: for each table, a ranked
-list of candidate entry points with the argv needed to produce it.
+and read the plan cache before believing the numbers. Expect the first run of
+each to fail in a way that is recheck's fault, not the paper's; fix the mapper
+or the taxonomy, add a test that pins the fix, and rerun.
 
-This is the one stage where a model call is appropriate — it is judgment over
-prose, not parsing. Keep it behind an interface with a deterministic fallback
-(filename and header-token matching) so the whole pipeline never *depends* on
-the model being right. Cache the mapping to disk keyed by repo commit so reruns
-are cheap and reviewable.
+Record for each paper: what routed, what did not and why, and whether the
+failure codes were the *right* ones. A paper where every cell comes back
+`SCRIPT_NOT_FOUND` is a mapper bug wearing a taxonomy code.
 
-When no candidate clears a confidence floor, emit `SCRIPT_NOT_FOUND` with the
-scripts that were considered as evidence. Do not guess.
+Add both as fixtures. Extraction fixtures need golden files
+(`tests/conftest.py::FIXTURE_NAMES` plus `scripts/update_golden.py`); results
+fixtures do not.
 
-### 3. Environment setup (`src/recheck/exec/env.py`, new)
+### 2. Container sandbox backend (`src/recheck/exec/sandbox.py`)
 
-Container plus `uv`. Resolve from `requirements.txt` / `pyproject.toml` /
-`environment.yml` in that order. Two failures are already in the taxonomy and
-must be reported rather than worked around:
+`LocalSandbox` runs a target repo's code as the invoking user. That is fine for
+the calibration repo and not fine for arbitrary repos off arXiv, which is
+exactly what launch means. Implement `DockerSandbox` against the existing
+protocol: mount the workdir, drop the network by default, cap memory, and map
+a non-zero exit from the container itself to `OTHER` with the container's own
+error rather than to a silent failure.
 
-- resolver conflict → `ENV_UNRESOLVABLE`, evidence = the resolver's own error
-- import present but unpinned and unbuildable → `MISSING_DEPENDENCY`, evidence
-  = the module name and the failing build line
+Select it with `--sandbox docker|local|auto`, defaulting to `auto`, and put the
+chosen backend in `Results.run.sandbox` — the field is already written and
+already rendered.
 
-Pin what actually got installed into `Results.run` so the report is auditable.
+Fall back to `LocalSandbox` with a printed warning when Docker is absent, and
+say which backend ran in the report. A report that does not say how isolated it
+was is making a claim it has not earned.
 
-### 4. Budgeted execution (`src/recheck/exec/runner.py`, new)
+### 3. Report polish
 
-Enforce `--max-hours` and `--max-gpu` as hard ceilings, checked before each
-run and again mid-run. Estimate cost first; if the estimate alone exceeds the
-remaining budget, do not start — emit `BUDGET_EXCEEDED` with the estimate and
-the ceiling, as `build_calibration_results.py` does today.
+The terminal report is readable; the markdown one is what people will paste.
+Two things it is missing:
 
-Seeds: use the seed the paper specifies. If a script is stochastic and neither
-paper nor repo documents a seed, that is `NONDETERMINISTIC_NO_SEED` — run it
-anyway, report the value, and let the status carry the caveat. Multi-seed runs
-populate `n_seeds` and `uncertainty`, which the diff engine already consumes.
+- **A provenance block, not a provenance line.** `run.entry_points` carries
+  status, estimate, blockers and caveats per table, and the renderer currently
+  collapses all of it into `run.note`. A short table — table, script, status,
+  what it cost — would say more than the sentence does.
+- **Per-cell provenance.** `run.entry_points` is per table, so a report cannot
+  currently mark *which* cells were re-run versus read from committed files.
+  This is the schema change milestone 2 deliberately did not make (it would
+  have moved the extraction goldens mid-milestone). Do it here: add an optional
+  `provenance` field to `ResultCell`, bump `SCHEMA_VERSION` to `1.1`,
+  regenerate the goldens in the *same* commit, and document the bump in
+  docs/SCHEMA.md.
 
-Never let a target repo's code escape the sandbox. Everything in CLAUDE.md's
-read-only rule applies here.
+### 4. README GIF and launch
 
-### 5. Result assembly
-
-Map each produced number back to its cell address. Any paper cell with no
-candidate script becomes a failure entry, **not** an omission — omission shows
-up as `NOT_ATTEMPTED`, which is a weaker and less useful claim than a specific
-code.
+Record `./scripts/demo.sh` plus one real paper run. The GIF should show a
+`BUDGET_EXCEEDED` with its evidence on screen — that is the thing that makes
+people understand what this is, and it is the frame worth choosing carefully.
 
 ## Definition of done
 
-- `recheck run <arxiv-id> --repo <url> --max-gpu 1` produces a report end to
-  end with no hand-written JSON anywhere in the path.
-- The garden-path paper reproduces from its real repo, replacing
-  `scripts/build_calibration_results.py`.
-- Every `UNRUNNABLE` cell carries evidence naming a file, a package, a resolver
-  error, or a measured cost. Spot-check that none of them read as generic.
-- Budget ceilings are enforced under test, including the estimate-only path.
-- `pytest` green, `ruff` clean, golden files unchanged — milestone 2 should not
-  perturb extraction at all. If a golden file moves, that is a bug in this work.
+- Two public papers reproduce end to end from their real repos, with their
+  reports committed under `reports/` and their plan caches spot-checked.
+- No cell in either report reads as generic. Every `UNRUNNABLE` names a file, a
+  package, a resolver error, a checkpoint, or a measured cost.
+- `DockerSandbox` passes the same runner tests as `LocalSandbox`, and the
+  backend that ran is on the report.
+- `pytest -m "not network"` green, `ruff` clean, goldens moved only in the
+  commit that deliberately bumps the schema.
+- README GIF in place, roadmap marked done.
 
 ## Known gaps carried forward
 
 - **No real LaTeX for the calibration paper.** `garden_path_calibration.tex` is
   a transcription; only a PDF exists locally. Export the source from Overleaf
-  and point `recheck extract` at it to close this — until then the paper side
-  of calibration is synthetic even though the numbers are real.
-- **Figures are out of scope** and stay out of scope for v1.
+  and point `recheck extract` at it. The paper side of calibration stays
+  synthetic until then, even though the numbers are real.
+- **`LocalSandbox` is containment, not a security boundary.** See item 2. Until
+  it lands, do not point `recheck run` at a repo you have not read.
+- **Committed artifacts can stand in for a run.** When a script is refused,
+  recheck aggregates the files already in the repo and says so in
+  `run.note`. That is a real check — a paper's printed numbers against its own
+  committed data — but it is not a re-run, and per-cell provenance (item 3) is
+  what will stop a reader having to take the note's word for it.
+- **Mapping needs an artifact to exist.** A repo that commits none of its
+  outputs is re-mapped after a successful run, but if that run is refused, its
+  cells report the blocker rather than a routing failure. That is honest but
+  coarse.
+- **Only CSV/TSV artifacts are routable**, and only mean/median/sum/count/stdev
+  are computable. See the seams above.
 - **Addresses are content-derived.** Renaming a model or reordering tables
   changes them. If that becomes painful, add a stable id alongside the address
-  rather than making addresses opaque — readability is what lets a results
-  file be written by hand.
+  rather than making addresses opaque — readability is what lets a results file
+  be written by hand.
+- **Figures are out of scope** and stay out of scope for v1.

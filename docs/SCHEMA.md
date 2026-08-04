@@ -105,7 +105,8 @@ Notes:
 
 ## results.json
 
-Produced by the execution agent (milestone 2); hand-written in tests today.
+Produced by `recheck run`. Still hand-writable, which is the point of readable
+addresses.
 
 ```jsonc
 {
@@ -113,11 +114,21 @@ Produced by the execution agent (milestone 2); hand-written in tests today.
   "run": {
     "repo": "https://github.com/example/garden-path",
     "commit": "a3f91c2",
-    "note": "free text, shown in the report header"
+    "commit_full": "a3f91c2…",       // 40 chars, when the repo was a git repo
+    "sandbox": "LocalSandbox",
+    "mapper": "deterministic",
+    "environment": { /* see below */ },
+    "budget":      { /* see below */ },
+    "entry_points": [ /* see below */ ],
+    "note": "free text, shown in the report header as Provenance"
   },
   "cells": [
     { "address": "Table 1 › GPT-2-large › Ambiguous",
       "value": 16.879, "uncertainty": 3.074, "n_seeds": 3 },
+
+    { "address": "Table 1 › GPT-2-large › Δ",
+      "value": 6.114,
+      "caveats": ["derived as (… › Ambiguous) − (… › Control)"] },
 
     { "address": "Table 1 › GPT-3 davinci › Ambiguous",
       "failure": { "code": "MISSING_CHECKPOINT", "evidence": "openai/davinci is API-gated …" } }
@@ -128,6 +139,50 @@ Produced by the execution agent (milestone 2); hand-written in tests today.
 Every cell carries **either** a `value` **or** a `failure`. An entry with
 neither is reported as `UNRUNNABLE` / `OTHER` with evidence saying so, because
 silently dropping it would overstate reproduction.
+
+`caveats` is optional and independent of that choice. It holds things that are
+true about a number that was *still produced* — a script that samples
+randomness without a seed, a column derived by subtraction. A caveat never
+replaces a value; it rides alongside it into the report's reason column, so the
+reader sees both. Codes may appear inside a caveat string
+(`"NONDETERMINISTIC_NO_SEED: …"`) without the cell being a failure.
+
+### run
+
+```jsonc
+"environment": {
+  "requirements": "requirements.txt",   // "" when the repo declares none
+  "requirements_kind": "requirements.txt | pyproject.toml | environment.yml | none",
+  "python": "/…/venv/bin/python",
+  "installed": ["numpy==2.0.0", "…"],   // what was actually installed
+  "note": "installed from requirements.txt with uv"
+},
+"budget": {
+  "max_hours": 2.0, "max_gpu_hours": 0.0, "max_download_mb": 512.0,
+  "spent_hours": 0.0031, "spent_gpu_hours": 0.0, "downloaded_mb": 0.0
+},
+"entry_points": [
+  {
+    "table": "tab:calibration",
+    "status": "executed | refused | failed | no_candidate",
+    "script": "score_surprisal_multimodel.py",
+    "estimate": { "wall_hours": 0.01, "gpu_hours": 0.0, "download_mb": 5930.0,
+                  "basis": ["… loads gpt2-large (~3.1 GB of weights)"] },
+    "blockers": [ { "code": "BUDGET_EXCEEDED", "evidence": "…" } ],
+    "caveats": ["NONDETERMINISTIC_NO_SEED: …"],
+    "seconds": 12.4
+  }
+]
+```
+
+`blockers` is a list because more than one thing can be true at once — a script
+can both import a package the repo never pinned *and* need 6 GB of weights.
+The first blocker is the code each affected cell reports; the rest stay on the
+record so nothing checkable is thrown away.
+
+`status` distinguishes **refused** (we declined to start, and `blockers` says
+why) from **failed** (we started and it exited non-zero). Both produce coded
+cells; only the second spent any budget.
 
 ### Failure codes
 
@@ -144,7 +199,55 @@ silently dropping it would overstate reproduction.
 | `OTHER` | Outside the taxonomy — **evidence is mandatory** |
 
 `evidence` should name something checkable: a file and line, a package
-specifier, a resolver error, a measured cost against the budget.
+specifier, a resolver error, a measured cost against the budget. Every code
+above is reachable from `recheck run`, and each has a test asserting both the
+code and that its evidence names something concrete.
+
+`NONDETERMINISTIC_NO_SEED` is the one code that normally appears as a
+**caveat** rather than a failure: the run happens, the number is reported, and
+the caveat travels with it. Reporting nothing there would hide a value the
+reader can still use.
+
+---
+
+## The mapping plan
+
+`recheck run` writes the script-to-table mapping to
+`~/.cache/recheck/plans/<commit>.<mapper>.json` (override with `--plan-cache`).
+It is regenerated when the commit changes, or on `--refresh-plan`.
+
+```jsonc
+{
+  "plan_version": "1",
+  "commit": "76c4369",
+  "mapper": "deterministic",
+  "tables": [{
+    "table_id": "tab:calibration",
+    "table_index": 1,
+    "cells": [
+      { "address": "Table 1 › GPT-2-large › Ambiguous",
+        "recipe": { "kind": "aggregate",
+                    "artifact": "phase1_stimuli/surprisal_gpt2-large.csv",
+                    "value_column": "critical_region_surprisal",
+                    "statistic": "mean",
+                    "filters": [{"column": "condition", "value": "ambiguous"},
+                                {"column": "construction", "value": "NPZ"}],
+                    "uncertainty": "stdev" } },
+      { "address": "Table 1 › GPT-2-large › Δ",
+        "recipe": { "kind": "difference", "minuend": "…", "subtrahend": "…" } },
+      { "address": "Table 1 › GPT-3 davinci › Ambiguous",
+        "failure": { "code": "MISSING_CHECKPOINT", "evidence": "…" } }
+    ],
+    "candidates": [{ "script": "score_surprisal_multimodel.py",
+                     "argv": ["python", "score_surprisal_multimodel.py"],
+                     "score": 6.5, "why": "writes 'phase1_stimuli/surprisal_'; …" }],
+    "considered": ["build_stimuli.py", "…"]
+  }]
+}
+```
+
+This file is the artifact to read when a number looks wrong. "You took the mean
+of the wrong column" is a fixable bug report; "the number is wrong" is not.
 
 ---
 

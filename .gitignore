@@ -9,3 +9,4 @@ build/
 *.log
 .recheck-work/
 .DS_Store
+.claude/

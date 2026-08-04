@@ -26,8 +26,11 @@ echo "════════════════════════�
 echo " 1. Calibration — the garden-path paper's real numbers"
 echo "════════════════════════════════════════════════════════════════════"
 echo
-echo "Paper values transcribed from the Price of Reanalysis phase-1 tables;"
-echo "rerun values recomputed from the repo's per-item surprisal CSVs."
+echo "Paper values transcribed from the Price of Reanalysis phase-1 tables."
+echo "Rerun values produced by the executor against the real repo — see the"
+echo "provenance line for what ran and what was refused. Regenerate with:"
+echo "  python scripts/build_calibration_results.py --repo ~/price-of-reanalysis \\"
+echo "      --out $RESULTS/garden_path_results.json"
 
 run uv run recheck extract "$FIXTURES/garden_path_calibration.tex" --out "$WORK/calibration.json"
 run uv run recheck diff "$WORK/calibration.json" "$RESULTS/garden_path_results.json"
