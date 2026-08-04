@@ -273,10 +273,17 @@ uv run pytest -m "not network"   # 306 tests, no network
 uv run pytest -m network         # also hit arXiv for real
 uv run ruff check .
 python scripts/update_golden.py  # only when an extraction change is intended
+python scripts/sweep_papers.py   # extraction across a corpus of real arXiv papers
 ```
 
 Golden files are committed. Tests never self-heal — regenerating is a
 deliberate act, and the resulting diff is the thing you review.
+
+`sweep_papers.py` is the other half of the net, and in practice the more
+productive one. Fixtures encode what their author already thought could go
+wrong; every extraction bug found so far was invisible to them and obvious the
+first time real papers went through. It exits non-zero on a crash or a
+structurally broken address, so it can gate a release.
 
 Every failure path in the taxonomy is provoked deliberately in
 `tests/test_runner.py` against synthetic repos built on the fly, and each test
