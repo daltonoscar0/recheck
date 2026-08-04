@@ -166,14 +166,23 @@ def unpinned_imports(
     Local modules — a sibling `.py` in the repo — are not dependencies, and
     neither is anything in the standard library.
     """
+    # Every directory on the way to a script is a candidate package name. Taking
+    # only the first component missed src/-layout repos entirely: `h01_data` at
+    # src/h01_data/ read as third-party, and recheck tried to install the repo's
+    # own module from PyPI, then reported the resolver's confusion as the
+    # paper's ENV_UNRESOLVABLE.
     local = {Path(other.path).stem for other in inventory.scripts}
-    local |= {Path(other.path).parts[0] for other in inventory.scripts if "/" in other.path}
+    for other in inventory.scripts:
+        local |= set(Path(other.path).parts[:-1])
     missing: list[tuple[str, int]] = []
     for module, line in imported_modules(script).items():
         if module in sys.stdlib_module_names or module in ALWAYS_AVAILABLE or module in local:
             continue
         distribution = normalize_distribution(IMPORT_ALIASES.get(module, module))
-        if distribution in source.distributions:
+        # A conda declaration is not installable with pip, so counting its names
+        # as satisfied would let a run start against an environment that never
+        # received them and fail at runtime with a ModuleNotFoundError.
+        if source.kind != EnvKind.CONDA and distribution in source.distributions:
             continue
         missing.append((module, line))
     return missing

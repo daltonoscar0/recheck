@@ -334,3 +334,55 @@ class TestCondaEnvironments:
         source = env_module.resolve_requirements(sandbox.workdir)
         environment, _ = env_module.build(sandbox, source, timeout=60)
         assert "disagree on package names" in environment.note
+
+
+class TestLocalModuleDetection:
+    """A repo's own packages are not dependencies, whatever the layout."""
+
+    def _inventory(self, tmp_path, paths):
+        from recheck.map.inventory import build_inventory
+
+        for rel in paths:
+            target = tmp_path / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("import numpy\n")
+        return build_inventory(tmp_path)
+
+    def test_a_src_layout_package_is_not_third_party(self, tmp_path) -> None:
+        from recheck.exec import env as env_module
+        from recheck.map.inventory import ScriptFile
+
+        inventory = self._inventory(
+            tmp_path, ["src/h01_data/processor.py", "src/h03_analysis/compile_results.py"]
+        )
+        script = ScriptFile(
+            path="src/h03_analysis/compile_results.py",
+            text="from h01_data.processor import UdProcessor\nimport pandas as pd\n",
+        )
+        source = env_module.RequirementSource(kind=env_module.EnvKind.NONE, path="")
+        missing = {module for module, _ in env_module.unpinned_imports(script, source, inventory)}
+        # Trying to pip install the repo's own module is how a src/ layout got
+        # reported as the paper's unresolvable environment.
+        assert "h01_data" not in missing
+        assert "pandas" in missing
+
+
+class TestCondaNamesAreNotTreatedAsInstalled:
+    def test_a_conda_declared_import_is_still_reported_missing(self, tmp_path) -> None:
+        from recheck.exec import env as env_module
+        from recheck.map.inventory import RepoInventory, ScriptFile
+
+        source = env_module.RequirementSource(
+            kind=env_module.EnvKind.CONDA, path="environment.yml",
+            distributions=frozenset({"numpy"}),
+        )
+        script = ScriptFile(path="run.py", text="import numpy\n")
+        missing = {
+            module
+            for module, _ in env_module.unpinned_imports(
+                script, source, RepoInventory(root=tmp_path)
+            )
+        }
+        # environment.yml lists numpy, but pip never installed it, so a run that
+        # treated it as satisfied would die at runtime instead.
+        assert "numpy" in missing
