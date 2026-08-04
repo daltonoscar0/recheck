@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import json
 
+import typer.main
 from typer.testing import CliRunner
 
 from conftest import SCORE_SCRIPT, SCORES_CSV, SCORES_PAPER_TEX, make_git_repo, shared_git_repo
 from recheck.cli import app
 
 runner = CliRunner()
+
+
+def declared_options(command: str | None = None) -> set[str]:
+    """Every option the CLI declares, read from the command tree.
+
+    Asserting against `--help` output tests how rich chose to lay out a panel at
+    the current terminal width — it truncates long option names and wraps
+    differently in CI than it does locally, which is what made these tests fail
+    on the first push. The argument surface is the contract; its rendering is not.
+    """
+    root = typer.main.get_command(app)
+    target = root.commands[command] if command else root
+    return {
+        option
+        for parameter in target.params
+        for option in (*parameter.opts, *parameter.secondary_opts)
+    }
 
 
 class TestHelp:
@@ -18,10 +36,10 @@ class TestHelp:
             assert command in result.stdout
 
     def test_run_exposes_the_full_argument_surface(self) -> None:
-        result = runner.invoke(app, ["run", "--help"])
-        assert result.exit_code == 0
-        for option in ("--repo", "--max-hours", "--max-gpu", "--out", "--tolerance"):
-            assert option in result.stdout
+        assert runner.invoke(app, ["run", "--help"]).exit_code == 0
+        assert {"--repo", "--max-hours", "--max-gpu", "--out", "--tolerance"} <= declared_options(
+            "run"
+        )
 
     def test_version(self) -> None:
         result = runner.invoke(app, ["--version"])
@@ -175,12 +193,12 @@ class TestRun:
 
     def test_help_lists_the_execution_flags(self) -> None:
         # Wide, so the option column is not wrapped mid-flag.
-        result = runner.invoke(app, ["run", "--help"], env={"COLUMNS": "200"})
-        assert result.exit_code == 0
-        for option in ("--max-download-mb", "--results-out", "--workdir", "--allow-dirty",
-                       "--committed-artifacts", "--no-committed-artifacts", "--plan-cache",
-                       "--refresh-plan"):
-            assert option in result.stdout
+        assert runner.invoke(app, ["run", "--help"]).exit_code == 0
+        assert {
+            "--max-download-mb", "--results-out", "--workdir", "--allow-dirty",
+            "--committed-artifacts", "--no-committed-artifacts", "--plan-cache",
+            "--refresh-plan",
+        } <= declared_options("run")
 
 
 class TestPerTableTolerance:
@@ -239,6 +257,6 @@ class TestPerTableTolerance:
         )
         assert result.exit_code == 2
 
-    def test_run_accepts_the_option(self, fixtures_dir) -> None:
-        result = runner.invoke(app, ["run", "--help"])
-        assert "--tolerance-config" in result.stdout
+    def test_run_accepts_the_option(self) -> None:
+        assert "--tolerance-config" in declared_options("run")
+        assert "--tolerance-config" in declared_options("diff")
