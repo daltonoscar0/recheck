@@ -303,3 +303,34 @@ class TestClassify:
         assert blocker.code is FailureCode.OTHER
         assert blocker.evidence.strip()
         assert "s.py" in blocker.evidence
+
+
+class TestCondaEnvironments:
+    """environment.yml cannot be rebuilt with pip, and pretending otherwise
+    installed the repo instead of its dependencies."""
+
+    def test_conda_repo_does_not_pip_install_the_repo_itself(self, tmp_path) -> None:
+        from recheck.exec import env as env_module
+        from recheck.exec.sandbox import LocalSandbox
+
+        sandbox = LocalSandbox(tmp_path)
+        (sandbox.workdir / "environment.yml").write_text(
+            "name: x\ndependencies:\n  - python=3.11\n  - pytorch\n"
+        )
+        source = env_module.resolve_requirements(sandbox.workdir)
+        assert source.kind == env_module.EnvKind.CONDA
+
+        environment, failure = env_module.build(sandbox, source, timeout=60)
+        assert failure is None
+        assert "conda" in environment.note
+        assert environment.venv is None
+
+    def test_the_note_says_why_rather_than_blaming_the_resolver(self, tmp_path) -> None:
+        from recheck.exec import env as env_module
+        from recheck.exec.sandbox import LocalSandbox
+
+        sandbox = LocalSandbox(tmp_path)
+        (sandbox.workdir / "environment.yml").write_text("name: x\ndependencies:\n  - numpy\n")
+        source = env_module.resolve_requirements(sandbox.workdir)
+        environment, _ = env_module.build(sandbox, source, timeout=60)
+        assert "disagree on package names" in environment.note

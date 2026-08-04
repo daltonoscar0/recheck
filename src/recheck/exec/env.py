@@ -250,10 +250,31 @@ def build(
     interpreter = venv / "bin" / "python"
     if source.kind == EnvKind.NONE:
         declared: list[str] = []
-    elif source.kind != EnvKind.REQUIREMENTS:
+    elif source.kind == EnvKind.CONDA:
+        # A conda environment.yml cannot be reconstructed with pip: conda and
+        # PyPI disagree on names for exactly the packages that matter here
+        # (conda's "pytorch" is PyPI's "torch"). Translating them would be a
+        # guess, and `uv pip install .` — the old behaviour — installed the repo
+        # itself rather than its dependencies, then blamed the resolver.
+        declared = []
+    elif source.kind == EnvKind.PYPROJECT:
         declared = ["."]
     else:
         declared = ["-r", source.path]
+
+    if source.kind == EnvKind.CONDA and not inferred:
+        return (
+            Environment(
+                source=source,
+                python=python,
+                note=(
+                    f"{source.path} declares dependencies for conda, which cannot be "
+                    f"reconstructed with pip (the two disagree on package names); "
+                    f"ran against the sandbox interpreter"
+                ),
+            ),
+            None,
+        )
 
     install_argv = ["uv", "pip", "install", "--python", str(interpreter), *declared,
                     *sorted(inferred)]
