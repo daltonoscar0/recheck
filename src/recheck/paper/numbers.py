@@ -21,6 +21,12 @@ _RE_PM = re.compile(rf"^({_NUM})\s*±\s*({_NUM})$")
 _RE_PAREN = re.compile(rf"^({_NUM})\s*\(\s*({_NUM})\s*\)$")
 _RE_SUBSCRIPT = re.compile(rf"({_NUM})\s*_\s*\{{\s*({_NUM})\s*\}}")
 
+# `$2.3 \cdot 10^{19}$` and `$1.5 \times 10^{-3}$`: ubiquitous in cost and
+# parameter-count columns, and meaningless if read as the bare mantissa.
+_RE_SCIENTIFIC = re.compile(
+    r"([-+−]?\d+(?:\.\d+)?)\s*\\(?:cdot|times)\s*10\s*\^\s*\{?\s*(-?\d+)\s*\}?"
+)
+
 _MARKER_CHARS = "*∗†‡§¶"
 _COMPARATORS = ("<=", ">=", "≤", "≥", "<", ">", "≈", "~")
 
@@ -50,8 +56,17 @@ def parse_cell(raw: str) -> ParsedNumber:
     """Interpret one cell's LaTeX source."""
     text = flatten(raw)
 
-    # Subscript uncertainty must be read before flattening loses the braces.
+    # Both of these must be read before flattening loses the braces.
+    scientific = _RE_SCIENTIFIC.search(raw)
     subscript = _RE_SUBSCRIPT.search(raw)
+
+    if scientific is not None:
+        return ParsedNumber(
+            is_numeric=True,
+            text=text,
+            value=_to_float(scientific.group(1)) * (10 ** int(scientific.group(2))),
+            unit=Unit.NONE,
+        )
 
     core = text
     markers: list[str] = []

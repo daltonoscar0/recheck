@@ -135,10 +135,19 @@ committed golden files are a real regression signal.
 Handled: `tabular` / `tabularx` / `tabular*` / `longtable`, booktabs and
 `\hline` rules, `\multicolumn` and `\multirow`, multi-level headers separated
 by `\cmidrule`, section rows inside the body, math-mode cells, `±` and
-parenthesised and subscript uncertainties, `%` and `×` units, significance
-markers, bold/italic emphasis (recorded, never interpreted), captions and
-labels in either order, unlabelled tables, and `\input`/`\include` across a
-multi-file project.
+parenthesised and subscript uncertainties, scientific notation
+(`$2.3\cdot10^{19}$`), `%` and `×` units, significance markers, bold/italic
+emphasis (recorded, never interpreted), captions and labels in either order,
+unlabelled tables, `\input`/`\include` across a multi-file project, and
+user-defined `\newcommand` / `\def` macros — which real papers use for their
+column headers.
+
+Citation keys, spacing macros, and rules are stripped with their arguments, so
+a row label reads `ByteNet`, not `ByteNet NalBytenet2017`.
+
+Sanity-checked against the *Attention Is All You Need* e-print
+(`recheck extract 1706.03762`): 4 tables, 136 numeric cells, every column
+header resolved.
 
 Every cell gets a human-readable address:
 
@@ -153,7 +162,7 @@ which is what a results file joins against, and what you read in the report.
 ## Development
 
 ```bash
-uv run pytest                    # 161 tests
+uv run pytest                    # 179 tests
 uv run pytest -m network         # also hit arXiv for real
 uv run ruff check .
 python scripts/update_golden.py  # only when an extraction change is intended

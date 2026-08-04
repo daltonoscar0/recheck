@@ -45,6 +45,28 @@ continuation rows carry `&` placeholders, so an empty cell under an active
 carry inherits the carried value. This is simpler than tracking occupancy and
 matches how the markup is actually written.
 
+**User-defined macros are expanded before parsing.** Validating against the
+real *Attention Is All You Need* source showed its column headers were
+`\dmodel` and `\dff` — `\newcommand` shorthands defined in the preamble.
+Without expansion those columns had no header at all. `\newcommand` and simple
+`\def` are collected and substituted, bounded to a few passes so a
+self-referential macro degrades instead of hanging. Structural commands
+(`\multicolumn`, `\begin`, …) are protected from being shadowed.
+
+**Citation keys and spacing macros are dropped with their arguments.** The same
+validation produced row labels like `ByteNet NalBytenet2017` and
+`0pt 2.0ex base`. Neither is anything a reader sees, and both corrupt the
+address a results file has to join against.
+
+**Command names end at `(?![a-zA-Z])`, not `\b`.** `_` is a word character, so
+`\b` never matched `\epsilon_{ls}` and the symbol was silently dropped as an
+unknown command, leaving a header reading `_ls`. This class of bug is invisible
+without real-paper fixtures.
+
+**Scientific notation is parsed.** `$2.3\cdot10^{19}$` is a number, and reading
+it as the bare mantissa `2.3` would be off by nineteen orders of magnitude in
+exactly the cost and parameter-count columns people care about.
+
 **Unlabelled tables get `table-N`.** Papers cite by number, and a synthetic id
 keeps the JSON keyable. Real `\label`s are preferred when present.
 

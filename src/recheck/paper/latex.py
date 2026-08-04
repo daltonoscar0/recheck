@@ -15,6 +15,7 @@ from dataclasses import dataclass
 _TRANSPARENT = {
     "textbf", "textit", "texttt", "textrm", "textsf", "textsc", "emph",
     "mathbf", "mathrm", "mathit", "mathsf", "boldmath", "bm",
+    "text", "mbox", "operatorname", "mathcal", "mathbb", "mathfrak", "textnormal",
     "small", "footnotesize", "scriptsize", "large", "Large", "normalsize",
     "centering", "raggedright", "raggedleft", "color", "textcolor",
 }
@@ -35,7 +36,13 @@ _NOISE = re.compile(
 
 # Commands dropped together with their argument: the argument is machinery, not
 # content, so leaving it behind would put "tab:main" inside a caption.
-_DROP_WITH_ARG = (("label", 1), ("vspace", 1), ("hspace", 1))
+# Citation keys are machinery too: a row label reading "ByteNet NalBytenet2017"
+# is worse than "ByteNet", and the key is never part of what the paper shows.
+_DROP_WITH_ARG = (
+    ("label", 1), ("vspace", 1), ("hspace", 1), ("rule", 2),
+    ("cite", 1), ("citep", 1), ("citet", 1), ("citealp", 1), ("citealt", 1),
+    ("citeauthor", 1), ("citeyear", 1), ("footnote", 1), ("footnotemark", 0),
+)
 
 # Commands whose *last* argument is the content and whose leading arguments are
 # layout: `\resizebox{\textwidth}{!}{x}` must reduce to "x", not "! x".
@@ -57,8 +64,12 @@ _GREEK = {
     "uparrow": "↑", "prime": "′", "degree": "°",
 }
 
+# `(?![a-zA-Z])` rather than `\b`: a trailing `_` is a word character, so `\b`
+# would fail to match "\epsilon_{ls}" and the symbol would vanish.
+_CMD_END = r"(?![a-zA-Z])"
+
 _SYMBOL_REPLACEMENTS = [
-    (r"\\" + name + r"\b", char) for name, char in _GREEK.items()
+    (r"\\" + name + _CMD_END, char) for name, char in _GREEK.items()
 ] + [
     (r"\\%", "%"),
     (r"\\&", "&"),
@@ -287,6 +298,102 @@ def strip_comments(text: str) -> str:
     return "\n".join(out)
 
 
+_NEWCOMMAND = re.compile(r"\\(?:re)?newcommand\*?\s*\{?\s*\\([a-zA-Z@]+)\s*\}?")
+_DEF = re.compile(r"\\def\s*\\([a-zA-Z@]+)\s*\{")
+
+# Never shadow the markup the grid builder depends on, however a paper redefines it.
+_PROTECTED = frozenset({
+    "multicolumn", "multirow", "begin", "end", "caption", "label", "input", "include",
+    "hline", "toprule", "midrule", "bottomrule", "cmidrule", "cline", "documentclass",
+})
+
+
+def collect_macros(text: str) -> dict[str, tuple[int, str]]:
+    r"""Collect user-defined `\newcommand` / `\def` macros as name -> (arity, body)."""
+    macros: dict[str, tuple[int, str]] = {}
+
+    for match in _NEWCOMMAND.finditer(text):
+        name = match.group(1)
+        if name in _PROTECTED:
+            continue
+        i = match.end()
+        while i < len(text) and text[i] in " \t\n":
+            i += 1
+        arity = 0
+        if i < len(text) and text[i] == "[":
+            close = text.find("]", i)
+            if close != -1:
+                try:
+                    arity = int(text[i + 1 : close].strip())
+                except ValueError:
+                    arity = 0
+                i = close + 1
+        # An optional-argument default follows; skipping it means such macros
+        # expand with the default missing, which beats not expanding at all.
+        while i < len(text) and text[i] in " \t\n":
+            i += 1
+        if i < len(text) and text[i] == "[":
+            close = text.find("]", i)
+            if close != -1:
+                i = close + 1
+        while i < len(text) and text[i] in " \t\n":
+            i += 1
+        if i < len(text) and text[i] == "{":
+            try:
+                close = find_matching_brace(text, i)
+            except ValueError:
+                continue
+            macros[name] = (arity, text[i + 1 : close])
+
+    for match in _DEF.finditer(text):
+        name = match.group(1)
+        if name in _PROTECTED or name in macros:
+            continue
+        brace = match.end() - 1
+        try:
+            close = find_matching_brace(text, brace)
+        except ValueError:
+            continue
+        macros[name] = (0, text[brace + 1 : close])
+
+    return macros
+
+
+def expand_macros(text: str, macros: dict[str, tuple[int, str]] | None = None,
+                  max_passes: int = 8) -> str:
+    r"""Expand user-defined macros so `$\dmodel$` becomes readable header text.
+
+    Bounded rather than fixed-point: a self-referential macro should degrade to
+    partially-expanded text, not hang the extractor.
+    """
+    macros = collect_macros(text) if macros is None else macros
+    if not macros:
+        return text
+
+    for _ in range(max_passes):
+        changed = False
+        for name, (arity, body) in macros.items():
+            pattern = re.compile(r"\\" + re.escape(name) + r"(?![a-zA-Z@])")
+            while True:
+                match = pattern.search(text)
+                if match is None:
+                    break
+                if arity:
+                    args, end = read_args(text, match.end(), arity)
+                    expansion = body
+                    for index, value in enumerate(args, start=1):
+                        expansion = expansion.replace(f"#{index}", value)
+                else:
+                    expansion, end = body, match.end()
+                if expansion == text[match.start() : end]:
+                    break  # self-referential; leave it alone
+                text = text[: match.start()] + expansion + text[end:]
+                changed = True
+        if not changed:
+            break
+    return text
+
+
 def collect_emphasis(text: str) -> list[str]:
     """Return the emphasis styles applied anywhere in a cell, in a stable order."""
     found: list[str] = []
@@ -333,5 +440,12 @@ def flatten(text: str) -> str:
         text = re.sub(pattern, replacement, text)
     text = re.sub(r"\$+", " ", text)
     text = re.sub(r"\\[a-zA-Z@]+\*?", " ", text)  # any surviving command
+    # Collapse sub/superscript groups before braces become spaces, so
+    # `d_{\text{model}}` reads as "d_model" rather than "d_ model".
+    text = re.sub(
+        r"([_^])\s*\{\s*([^{}]*?)\s*\}",
+        lambda m: m.group(1) + re.sub(r"\s+", "", m.group(2)),
+        text,
+    )
     text = text.replace("{", " ").replace("}", " ")
     return re.sub(r"\s+", " ", text).strip()

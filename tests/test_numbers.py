@@ -83,3 +83,23 @@ class TestNonNumeric:
 
     def test_text_is_preserved_for_non_numeric_cells(self) -> None:
         assert parse_cell(r"\textbf{GPT-2-large}").text == "GPT-2-large"
+
+
+class TestScientificNotation:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (r"$2.3\cdot10^{19}$", 2.3e19),
+            (r"$1.0 \cdot 10^{20}$", 1.0e20),
+            (r"$1.5\times10^{-3}$", 1.5e-3),
+            (r"$9.6\cdot10^{18}$", 9.6e18),
+        ],
+    )
+    def test_reads_mantissa_and_exponent(self, raw: str, expected: float) -> None:
+        parsed = parse_cell(raw)
+        assert parsed.is_numeric
+        assert parsed.value == pytest.approx(expected)
+
+    def test_bare_mantissa_would_be_wrong(self) -> None:
+        # Guards the failure this exists to prevent: reading 2.3e19 as 2.3.
+        assert parse_cell(r"$2.3\cdot10^{19}$").value > 1e18

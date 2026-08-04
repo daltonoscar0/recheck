@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from ..schema import Cell, Paper, Table, make_address
 from .latex import (
     collect_emphasis,
+    expand_macros,
     find_command,
     find_matching_brace,
     flatten,
@@ -369,7 +370,7 @@ def _attach_context(paper: Paper, document: str) -> None:
 
 def extract_tables(document: str, source: dict | None = None) -> Paper:
     """Extract every table float in a LaTeX document into a `Paper`."""
-    document = strip_comments(document)
+    document = expand_macros(strip_comments(document))
     tables: list[Table] = []
     consumed: list[tuple[int, int]] = []
 
