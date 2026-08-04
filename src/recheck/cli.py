@@ -151,6 +151,24 @@ def _read_member(files: dict[str, str], name: str) -> str | None:
     return None
 
 
+def _load_json_model(path: Path, reader, label: str):
+    """Read a JSON input, reporting bad input as bad input.
+
+    An unreadable file is a usage error, not a failed comparison: letting the
+    exception escape gave a traceback and exit 1, which is the code that means
+    "a cell contradicts the paper".
+    """
+    try:
+        return reader(path)
+    except FileNotFoundError as exc:
+        raise typer.BadParameter(f"{label} not found: {path}") from exc
+    except OSError as exc:
+        raise typer.BadParameter(f"{label} could not be read ({path}): {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"{label} is not valid JSON ({path}): {exc}") from exc
+
+
+
 @app.command()
 def extract(
     source: Annotated[
@@ -193,13 +211,16 @@ def diff_command(
 ) -> None:
     """Compare extracted paper cells against a results file."""
     try:
-        paper = Paper.read(paper_json)
-        results = Results.read(results_json)
+        paper = _load_json_model(paper_json, Paper.read, "paper.json")
+        results = _load_json_model(results_json, Results.read, "results.json")
         policy, config_used = resolve_policy(
             tolerance_config,
             parse_tolerance(tolerance) if tolerance else None,
             search_from=paper_json,
         )
+    except typer.BadParameter as exc:
+        err_console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
     except (SchemaError, ConfigError, ValueError) as exc:
         err_console.print(f"[red]error:[/red] {exc}")
         raise typer.Exit(code=2) from exc

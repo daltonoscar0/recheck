@@ -125,3 +125,26 @@ class TestHelpers:
             ["git", "-C", str(source), *GIT_IDENTITY, "commit", "-q", "-m", "second"], check=True
         )
         assert acquire(str(source), tmp_path / "two").commit != first
+
+
+class TestPortableProvenance:
+    def test_a_home_path_is_recorded_relative(self, tmp_path, monkeypatch) -> None:
+        from recheck.repo.acquire import _portable_spec
+
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        (tmp_path / "paper-code").mkdir()
+        assert _portable_spec(str(tmp_path / "paper-code")) == "~/paper-code"
+
+    def test_a_git_url_is_left_alone(self) -> None:
+        from recheck.repo.acquire import _portable_spec
+
+        for url in ("https://github.com/a/b", "git@github.com:a/b.git"):
+            assert _portable_spec(url) == url
+
+    def test_a_path_outside_home_is_left_alone(self, tmp_path, monkeypatch) -> None:
+        from recheck.repo.acquire import _portable_spec
+
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path / "home")
+        outside = tmp_path / "elsewhere"
+        outside.mkdir()
+        assert _portable_spec(str(outside)) == str(outside)

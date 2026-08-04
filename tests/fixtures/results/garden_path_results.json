@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "run": {
-    "repo": "/Users/oscardalton/price-of-reanalysis",
+    "repo": "~/price-of-reanalysis",
     "commit": "76c4369",
     "commit_full": "76c43698ba27092440bb94b154d075d10f4c646d",
     "sandbox": "LocalSandbox",

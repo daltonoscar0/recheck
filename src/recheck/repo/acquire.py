@@ -44,11 +44,26 @@ class AcquiredRepo:
     """Local source directory, when the spec was a path rather than a URL."""
 
     def to_run_fields(self) -> dict[str, str]:
-        """The subset of acquisition that belongs in `Results.run`."""
-        fields = {"repo": self.spec, "commit": self.commit}
+        """The subset of acquisition that belongs in `Results.run`.
+
+        A local path is recorded home-relative. Reports and results files get
+        committed and shared, and an absolute `/Users/<name>/...` leaks a
+        machine layout without making the provenance any truer.
+        """
+        fields = {"repo": _portable_spec(self.spec), "commit": self.commit}
         if self.commit_full and self.commit_full != self.commit:
             fields["commit_full"] = self.commit_full
         return fields
+
+
+def _portable_spec(spec: str) -> str:
+    """Rewrite a path under the user's home as `~/...`; leave URLs untouched."""
+    if "://" in spec or spec.startswith("git@"):
+        return spec
+    try:
+        return "~/" + str(Path(spec).expanduser().resolve().relative_to(Path.home()))
+    except (ValueError, OSError):
+        return spec
 
 
 def _git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

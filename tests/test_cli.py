@@ -260,3 +260,42 @@ class TestPerTableTolerance:
     def test_run_accepts_the_option(self) -> None:
         assert "--tolerance-config" in declared_options("run")
         assert "--tolerance-config" in declared_options("diff")
+
+
+class TestBadInput:
+    """Unreadable inputs are usage errors, not failed comparisons."""
+
+    def test_missing_paper_file_exits_two(self, tmp_path) -> None:
+        result = runner.invoke(
+            app, ["diff", str(tmp_path / "absent.json"), str(tmp_path / "b.json")]
+        )
+        assert result.exit_code == 2
+        assert "paper.json not found" in result.output
+
+    def test_missing_results_file_names_it(self, tmp_path, fixtures_dir) -> None:
+        paper = tmp_path / "paper.json"
+        runner.invoke(
+            app,
+            ["extract", str(fixtures_dir / "clean_booktabs.tex"), "--out", str(paper)],
+        )
+        result = runner.invoke(app, ["diff", str(paper), str(tmp_path / "absent.json")])
+        assert result.exit_code == 2
+        assert "results.json not found" in result.output
+
+    def test_malformed_json_names_the_file(self, tmp_path, fixtures_dir) -> None:
+        paper = tmp_path / "paper.json"
+        runner.invoke(
+            app,
+            ["extract", str(fixtures_dir / "clean_booktabs.tex"), "--out", str(paper)],
+        )
+        bad = tmp_path / "bad.json"
+        bad.write_text("not json")
+        result = runner.invoke(app, ["diff", str(paper), str(bad)])
+        assert result.exit_code == 2
+        assert "not valid JSON" in result.output
+        assert "bad.json" in result.output
+
+    def test_no_traceback_leaks_to_the_user(self, tmp_path) -> None:
+        result = runner.invoke(app, ["diff", str(tmp_path / "a.json"), str(tmp_path / "b.json")])
+        assert "Traceback" not in result.output
+        assert "FileNotFoundError" not in result.output

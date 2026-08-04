@@ -17,10 +17,14 @@ STATUS_STYLE: dict[Status, str] = {
     Status.NOT_ATTEMPTED: "dim",
 }
 
+#: One distinct shape per status. Colour alone is not enough: the report is
+#: routinely piped to a file, pasted into a message, or read by someone who
+#: cannot distinguish red from green, and in every one of those cases three
+#: identical dots carry no information at all.
 STATUS_MARK: dict[Status, str] = {
     Status.GREEN: "●",
-    Status.YELLOW: "●",
-    Status.RED: "●",
+    Status.YELLOW: "◐",
+    Status.RED: "✕",
     Status.UNRUNNABLE: "▲",
     Status.NOT_ATTEMPTED: "·",
 }

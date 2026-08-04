@@ -356,7 +356,7 @@ def _recipe_for(
             return None, PlanFailure(
                 code=FailureCode.SCRIPT_NOT_FOUND, evidence=ambiguities[0].evidence
             )
-        code, evidence = _unmatched_code(cell, peers, inventory)
+        code, evidence = _unmatched_code(cell, peers, inventory, aliases)
         return None, PlanFailure(code=code, evidence=evidence)
 
     scored.sort(key=lambda item: (-item[0], item[1].path))
@@ -432,7 +432,10 @@ def _recipe_from_artifact(
 
 
 def _unmatched_code(
-    cell: Cell, peers: list[Cell], inventory: RepoInventory
+    cell: Cell,
+    peers: list[Cell],
+    inventory: RepoInventory,
+    aliases: AliasTable | None = None,
 ) -> tuple[FailureCode, str]:
     """The most specific code for a cell nothing in the repo produces.
 
@@ -441,7 +444,7 @@ def _unmatched_code(
     is telling you exactly which model it cannot reach. `MISSING_CHECKPOINT` is
     a stronger and more useful claim than "no script found".
     """
-    checkpoint = _missing_checkpoint(cell, peers, inventory)
+    checkpoint = _missing_checkpoint(cell, peers, inventory, aliases)
     if checkpoint is not None:
         return FailureCode.MISSING_CHECKPOINT, checkpoint
 
@@ -456,7 +459,19 @@ def _unmatched_code(
     )
 
 
-def _missing_checkpoint(cell: Cell, peers: list[Cell], inventory: RepoInventory) -> str | None:
+def _missing_checkpoint(
+    cell: Cell,
+    peers: list[Cell],
+    inventory: RepoInventory,
+    aliases: AliasTable | None = None,
+) -> str | None:
+    """Claim a checkpoint is unreachable only when it genuinely is.
+
+    A name the repo calls something else is still reachable: this repo scores
+    `vanilla` and the paper calls it `LSTM`. Asserting "no checkpoint for
+    'LSTM'" while another table's LSTM row reproduced from that same repo is
+    a confidently wrong reason, which is worse than a vague one.
+    """
     enumerations = model_enumerations(inventory.scripts)
     if not enumerations:
         return None
@@ -466,8 +481,12 @@ def _missing_checkpoint(cell: Cell, peers: list[Cell], inventory: RepoInventory)
             for other in peers
             if len(other.row_path) > index and other.row_path[index] != name
         }
+        # Every name this repo is known to equate to the paper's name.
+        equivalents = [name, *(other for other, _ in (aliases or AliasTable()).for_name(name))]
         for script_path, ids in enumerations:
-            if names_a_model(name, ids):
+            if any(names_a_model(equivalent, ids) for equivalent in equivalents):
+                continue
+            if _appears_in_data(equivalents, inventory):
                 continue
             if not any(names_a_model(sibling, ids) for sibling in siblings):
                 continue
@@ -477,6 +496,18 @@ def _missing_checkpoint(cell: Cell, peers: list[Cell], inventory: RepoInventory)
                 f"table's other rows but not this one"
             )
     return None
+
+
+def _appears_in_data(names: list[str], inventory: RepoInventory) -> bool:
+    """Is any of these names a value the repo's committed data actually carries?"""
+    from .tokens import same_name
+
+    for artifact in inventory.artifacts:
+        for values in artifact.categories.values():
+            for value in values:
+                if any(same_name(name, value) for name in names):
+                    return True
+    return False
 
 
 # --------------------------------------------------------------------------

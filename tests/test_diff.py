@@ -193,3 +193,29 @@ class TestMarkdownRendering:
             # must be escaped rather than opening a seventh column.
             assert row.count("|") - row.count("\\|") == 7
             assert "\\|" in row
+
+
+class TestStatusMarks:
+    def test_every_status_has_a_distinct_shape(self) -> None:
+        # Colour is reinforcement, not the signal: stripped of ANSI the report
+        # still has to be readable.
+        from recheck.diff.render import STATUS_MARK
+
+        marks = [STATUS_MARK[status] for status in Status]
+        assert len(set(marks)) == len(marks)
+
+    def test_terminal_report_distinguishes_green_from_red_without_colour(self) -> None:
+        import re
+
+        from rich.console import Console
+
+        from recheck.diff.render import render_terminal
+
+        green = compare(make_paper(1.0), make_results(value=1.0))
+        red = compare(make_paper(1.0), make_results(value=99.0))
+        rendered = []
+        for report in (green, red):
+            console = Console(file=__import__("io").StringIO(), width=100, no_color=True)
+            render_terminal(report, console)
+            rendered.append(re.sub(r"\x1b\[[0-9;]*m", "", console.file.getvalue()))
+        assert rendered[0] != rendered[1]
