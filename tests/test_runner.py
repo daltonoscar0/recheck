@@ -462,3 +462,10 @@ class TestInstallInferred:
         dev = cell(report, "tiny › dev")
         assert dev is not None
         assert dev.value is None or dev.value == pytest.approx(0.10)
+
+    def test_the_install_is_charged_against_the_download_budget(self, tmp_path) -> None:
+        # A budget only checked against an estimate is not a budget: real bytes
+        # landed on disk and the ledger has to show them.
+        report = run(tmp_path, UNDECLARED_FILES, install_inferred=True)
+        spent = report.results.run["budget"]["downloaded_mb"]
+        assert spent > 0, "installing pandas cost megabytes the ledger never recorded"

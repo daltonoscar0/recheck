@@ -281,6 +281,25 @@ def build(
     )
 
 
+def directory_mb(path: Path | None) -> float:
+    """Size of a directory tree in megabytes, for charging what an install cost.
+
+    Measured rather than estimated: package sizes are not knowable ahead of
+    time, and a budget that is only ever checked against a guess is not a
+    budget.
+    """
+    if path is None or not path.exists():
+        return 0.0
+    total = 0
+    for child in path.rglob("*"):
+        try:
+            if child.is_file() and not child.is_symlink():
+                total += child.stat().st_size
+        except OSError:
+            continue
+    return total / (1024 * 1024)
+
+
 def install_extra(
     sandbox: Sandbox, environment: Environment, extra: frozenset[str], *, timeout: float
 ) -> CommandResult | None:

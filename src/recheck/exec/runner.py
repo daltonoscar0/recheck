@@ -297,6 +297,9 @@ def _run_table(
     #    built once per run and reused, so a table reached later may need a
     #    package an earlier one did not — top up rather than run without it.
     failed_install: CommandResult | None = None
+    installed_mb_before = env_module.directory_mb(
+        environment.venv if environment is not None else None
+    )
     with Stopwatch(ledger) as watch:
         if environment is None:
             environment, failed_install = env_module.build(
@@ -310,6 +313,13 @@ def _run_table(
                 sandbox, environment, inferred, timeout=ledger.remaining_seconds()
             )
     outcome.seconds += watch.elapsed
+    # Charge what the install actually cost. Without this the download ledger
+    # is written but never read, and --max-download-mb only ever gates the
+    # pre-run estimate while real bytes land unmetered.
+    if environment is not None and environment.venv is not None:
+        grown = env_module.directory_mb(environment.venv) - installed_mb_before
+        if grown > 0:
+            ledger.spend_download(grown)
     if failed_install is not None:
         outcome.blockers.append(
             Blocker(
